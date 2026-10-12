@@ -1,0 +1,40 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows 上出过真 bug（python3 是 Store 占位程序、stdout 编码），
+        # 两个平台都跑，免得再悄悄腐烂。
+        os: [ubuntu-latest, windows-latest]
+
+    env:
+      # 测试脚本和被测代码都会往 stdout 写中文。英文 locale 的 Windows
+      # （windows-latest runner 就是）上 Python 默认用 cp1252，编不出中文，
+      # 会 UnicodeEncodeError。（中文 locale 的机器上是 cp936，只会乱码不崩。）
+      PYTHONUTF8: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 进度读取器 generic.py
+        working-directory: exptool
+        run: python tests/test_generic.py
+
+      - name: exp 命令（local 模式）
+        working-directory: exptool
+        shell: bash
+        run: bash tests/test_exp.sh

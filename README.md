@@ -1,8 +1,41 @@
 # ai-coding-coach
 
-一个 Claude Code skill：**一边帮你写代码，一边把你教成能一眼看出 AI 哪里写错了的算法工程师。**
+[![tests](https://github.com/jackeyloveseven/ai-coding-coach/actions/workflows/test.yml/badge.svg)](https://github.com/jackeyloveseven/ai-coding-coach/actions/workflows/test.yml)
 
-面向初级 / 中级算法工程师。不是让你写得比 AI 快，而是让你审得动 AI。
+> **一边帮你写代码，一边把你教成能一眼看出 AI 哪里写错了的算法工程师。**
+
+面向初级 / 中级算法工程师。不追求写得比 AI 快，追求**审得动** AI。
+
+```
+/plugin install ai-coding-coach --marketplace jackeyloveseven/ai-coding-coach
+```
+
+<sub>其他装法见[安装](#安装)。</sub>
+
+---
+
+## 它长什么样
+
+**🟡 黄档** —— 你贴一段评估代码给我看。我改完之后，附一个「读懂检查点」：
+
+> - **关键行**：`model.eval()` 和 `torch.no_grad()` 缺一不可。少了 `eval()`，dropout 和 BatchNorm 还留在训练态，指标会又抖又偏低——而且**不报错**。
+> - **静默风险**：`total += batch_loss` 没乘 batch size，最后除以 `len(loader)` 得到的是「每 batch 平均」。最后一批样本不满时它会偏。验证：跟 `总loss / 总样本数` 对一下。
+> - **先预测**：这段跑完，`val_loss` 和训练最后几个 step 的 `train_loss` 差多少？
+> - **自测**：把 `model.eval()` 删掉，指标会变好还是变差？为什么？
+
+**🔴 红档** —— 你要自己实现 DPO loss。我不给答案，给脚手架：
+
+> 你写一版，我们再对照：
+>
+> ```python
+> def dpo_loss(policy_logps, ref_logps, chosen, rejected, beta=0.1):
+>     """返回 (loss, chosen_rewards, rejected_rewards)。
+>     写完和官方实现比 torch.allclose。"""
+> ```
+>
+> 一个提示：`beta` 在这份实现里应该出现**两次**，想清楚分别为什么。
+
+想直接要答案？回一句「**直接给**」，立刻给，不追问。
 
 ---
 
@@ -118,6 +151,7 @@ git clone https://github.com/jackeyloveseven/ai-coding-coach .claude/skills/ai-c
 ai-coding-coach/
 ├── .claude-plugin/
 │   └── marketplace.json                  # 插件清单，支持 /plugin install 一条命令安装
+├── .github/workflows/test.yml            # CI：ubuntu + windows 两个平台跑测试
 ├── SKILL.md                              # 主入口：分档逻辑、三档做法、强度与预算
 ├── references/
 │   ├── training-run-literacy.md          # 训练日志、指标、实验状态、故障分诊
