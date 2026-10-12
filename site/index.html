@@ -288,8 +288,12 @@ figcaption{margin-top:.7rem; font-size:.83rem; color:var(--muted); max-width:40e
 .term .s{color:var(--term-str)}
 .term .d{color:var(--term-dim)}
 
-.examples{display:grid; gap:1.4rem; margin-top:1.6rem}
-@media (min-width:900px){ .examples{grid-template-columns:1fr 1fr} }
+/* minmax(0,1fr) 而不是 1fr：1fr 的最小尺寸是 auto，也就是内容的 min-content。
+   终端块里的 <pre> 不换行，min-content 就是最长那一行，栅格会被撑到比屏幕还宽。
+   同理，栅格子项也要 min-width:0，里面的 <pre> 才会去滚动而不是把页面顶宽。 */
+.examples{display:grid; grid-template-columns:minmax(0,1fr); gap:1.4rem; margin-top:1.6rem}
+.examples > *{min-width:0}
+@media (min-width:900px){ .examples{grid-template-columns:repeat(2, minmax(0,1fr))} }
 .ex-head{display:flex; align-items:center; gap:9px; margin-bottom:.6rem; font-size:.9rem; font-weight:600}
 .ex-head .dot{width:9px; height:9px; border-radius:50%}
 .ex-head.amber .dot{background:var(--tier-amber)} .ex-head.amber{color:var(--tier-amber)}
