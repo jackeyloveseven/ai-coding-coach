@@ -23,6 +23,11 @@ FAILED_MARKER="FAILED"
 DONE_MARKER="DONE"
 LOG_DIR="logs"
 PLAN_FILE="PLAN.md"
+# exp report 的渲染器在本机跑，用它。留空就用 REMOTE_PYTHON（local 模式下两者本来就是同一个）。
+LOCAL_PYTHON=""
+# exp report 默认把报告写到这里（相对当前目录）。默认当前目录，别写进运行目录——
+# 那可能是共享盘、只读或别人的。用 exp report --out <路径> 可以单次覆盖。
+REPORT_DIR="."
 # ---------------------------------------------------------------------------
 
 EXPT_CONF="${EXPT_CONF:-$HOME/.config/exptool/config}"
@@ -169,6 +174,74 @@ cmd_gpu() {
       NF < 4 { print "  " $0 }'
 }
 
+health_lines() {
+  # 健康检查的每一行，status 和 report 共用一份逻辑。
+  #   $1 = text  打给人看的纯文本（status 用）
+  #   $1 = tsv   打「状态<TAB>标签<TAB>值」（report 用），状态: ok / warn / info
+  local fmt="${1:-text}"
+  _health() {
+    if [ "$fmt" = "tsv" ]; then
+      printf '%s\t%s\t%s\n' "$1" "$2" "$3"
+    else
+      printf '  %s: %s\n' "$2" "$3"
+    fi
+  }
+
+  # tmux 还在不在
+  if [ "$R_TMUX" = "-" ]; then
+    _health info "tmux" "-（这个实验不归 exp start/stop 管）"
+  elif run_on "$R_MACHINE" "tmux has-session -t '$R_TMUX' 2>/dev/null" >/dev/null 2>&1; then
+    _health ok "tmux $R_TMUX" "在"
+  else
+    _health warn "tmux $R_TMUX" "不在了 -> 敲 exp errors $R_NAME 看报错"
+  fi
+
+  # 标记文件
+  local marks
+  marks="$(run_on "$R_MACHINE" "for f in '$FAILED_MARKER' '$DONE_MARKER'; do [ -e \"$R_DIR/\$f\" ] && echo \"\$f\"; done" 2>/dev/null || true)"
+  if [ -z "$marks" ]; then
+    _health info "标记文件" "无"
+  else
+    _health warn "标记文件" "$(echo "$marks" | tr '\n' ' ')"
+  fi
+
+  # 日志最后更新
+  local newest mtime now mins
+  newest="$(newest_log "$R_MACHINE" "$R_DIR")"
+  if [ -z "$newest" ]; then
+    _health warn "日志" "没找到（看 $R_DIR/$LOG_DIR）"
+  else
+    mtime="$(run_on "$R_MACHINE" "stat -c %Y '$newest' 2>/dev/null || stat -f %m '$newest' 2>/dev/null" 2>/dev/null || true)"
+    now="$(run_on "$R_MACHINE" "date +%s" 2>/dev/null || true)"
+    if [ -n "$mtime" ] && [ -n "$now" ]; then
+      mins=$(( (now - mtime) / 60 ))
+      if [ "$mins" -gt 30 ]; then
+        _health warn "日志最后更新" "${mins} 分钟前（$(basename "$newest")）"
+        if [ "$fmt" = "tsv" ]; then
+          printf 'warn\t日志停更\t超过 30 分钟没动，可能卡在奖励服务、NCCL 或死锁上\n'
+        else
+          printf '    -> 超过 30 分钟没动，可能卡在奖励服务、NCCL 或死锁上\n'
+        fi
+      else
+        _health ok "日志最后更新" "${mins} 分钟前（$(basename "$newest")）"
+      fi
+    else
+      _health info "日志" "$(basename "$newest")（读不到时间）"
+    fi
+  fi
+
+  # 奖励服务（配了才查）
+  if [ -n "$REWARD_HEALTH_URL" ]; then
+    local code
+    code="$(run_on "$R_MACHINE" "curl -s -o /dev/null -m 5 -w '%{http_code}' '$REWARD_HEALTH_URL'" 2>/dev/null || true)"
+    case "$code" in
+      200|401) _health ok "奖励服务" "活着（HTTP $code）" ;;
+      000|"")  _health warn "奖励服务" "没响应（HTTP ${code:-000}）-> 服务可能挂了" ;;
+      *)       _health info "奖励服务" "HTTP $code" ;;
+    esac
+  fi
+}
+
 cmd_status() {
   local name="${1:-$(first_run_name)}"
   load_run "$name" || return 1
@@ -179,54 +252,7 @@ cmd_status() {
   printf '方法: %s\n' "$R_METHOD"
   echo
   echo "健康检查"
-
-  # tmux 还在不在
-  if [ "$R_TMUX" = "-" ]; then
-    echo "  tmux: -（这个实验不归 exp start/stop 管）"
-  elif run_on "$R_MACHINE" "tmux has-session -t '$R_TMUX' 2>/dev/null" >/dev/null 2>&1; then
-    echo "  tmux $R_TMUX: 在"
-  else
-    echo "  tmux $R_TMUX: 不在了 -> 敲 exp errors $R_NAME 看报错"
-  fi
-
-  # 标记文件
-  local marks
-  marks="$(run_on "$R_MACHINE" "for f in '$FAILED_MARKER' '$DONE_MARKER'; do [ -e \"$R_DIR/\$f\" ] && echo \"\$f\"; done" 2>/dev/null || true)"
-  if [ -z "$marks" ]; then
-    echo "  标记文件: 无"
-  else
-    echo "  标记文件: $(echo "$marks" | tr '\n' ' ')"
-  fi
-
-  # 日志最后更新
-  local newest mtime now mins
-  newest="$(newest_log "$R_MACHINE" "$R_DIR")"
-  if [ -z "$newest" ]; then
-    echo "  日志: 没找到（看 $R_DIR/$LOG_DIR）"
-  else
-    mtime="$(run_on "$R_MACHINE" "stat -c %Y '$newest' 2>/dev/null || stat -f %m '$newest' 2>/dev/null" 2>/dev/null || true)"
-    now="$(run_on "$R_MACHINE" "date +%s" 2>/dev/null || true)"
-    if [ -n "$mtime" ] && [ -n "$now" ]; then
-      mins=$(( (now - mtime) / 60 ))
-      echo "  日志最后更新: ${mins} 分钟前（$(basename "$newest")）"
-      if [ "$mins" -gt 30 ]; then
-        echo "    -> 超过 30 分钟没动，可能卡在奖励服务、NCCL 或死锁上"
-      fi
-    else
-      echo "  日志: $(basename "$newest")（读不到时间）"
-    fi
-  fi
-
-  # 奖励服务（配了才查）
-  if [ -n "$REWARD_HEALTH_URL" ]; then
-    local code
-    code="$(run_on "$R_MACHINE" "curl -s -o /dev/null -m 5 -w '%{http_code}' '$REWARD_HEALTH_URL'" 2>/dev/null || true)"
-    case "$code" in
-      200|401) echo "  奖励服务: 活着（HTTP $code）" ;;
-      000|"")  echo "  奖励服务: 没响应（HTTP ${code:-000}）-> 服务可能挂了" ;;
-      *)       echo "  奖励服务: HTTP $code" ;;
-    esac
-  fi
+  health_lines text
 
   # 事前记录：把「判据」和指标摆在一起，逼自己对照跑之前定下的标准，
   # 而不是看完数字再回头找理由。没写也不拦着，只提醒一句。
@@ -255,11 +281,17 @@ cmd_status() {
   run_reader "$R_MACHINE" "$R_DIR" "$R_METHOD"
 }
 
-run_reader() {
-  local machine="$1" dir="$2" method="$3"
-  local base="${method%%-*}"     # awm-hps -> awm
+reader_path() {
+  # 方法列 awm-hps -> progress/awm.py；没有同名脚本就用通用的
+  local base="${1%%-*}"     # awm-hps -> awm
   local reader="$SELF_DIR/progress/$base.py"
   [ -f "$reader" ] || reader="$SELF_DIR/progress/generic.py"
+  echo "$reader"
+}
+
+run_reader() {
+  local machine="$1" dir="$2" method="$3"
+  local reader; reader="$(reader_path "$method")"
 
   if [ "$machine" = "local" ]; then
     show_cmd "$REMOTE_PYTHON $reader '$dir'"
@@ -269,6 +301,19 @@ run_reader() {
     show_cmd "ssh $machine \"$REMOTE_PYTHON - '$dir'\" < $reader"
     # shellcheck disable=SC2086
     ssh $SSH_OPTS "$machine" "$REMOTE_PYTHON - '$dir'" < "$reader"
+  fi
+}
+
+dump_series_json() {
+  # dump_series_json <机器> <目录> <读取器>：把原始序列按 JSON 打到 stdout，给 exp report 画图
+  local machine="$1" dir="$2" reader="$3"
+  if [ "$machine" = "local" ]; then
+    show_cmd "$REMOTE_PYTHON $reader '$dir' --json"
+    "$REMOTE_PYTHON" "$reader" "$dir" --json
+  else
+    show_cmd "ssh $machine \"$REMOTE_PYTHON - '$dir' --json\" < $reader"
+    # shellcheck disable=SC2086
+    ssh $SSH_OPTS "$machine" "$REMOTE_PYTHON - '$dir' --json" < "$reader"
   fi
 }
 
@@ -339,6 +384,69 @@ PLAN
   echo
   echo "已生成 $path —— 把 <尖括号> 里的填掉。"
   echo "填完再 exp status $name，「判据」就会印在指标旁边。"
+}
+
+cmd_report() {
+  local name="" out=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --out)     out="${2:-}"; shift 2 ;;
+      --out=*)   out="${1#--out=}"; shift ;;
+      -h|--help) echo "用法: exp report [名字] [--out 路径]" >&2; return 0 ;;
+      -*)        echo "不认识的参数：$1" >&2; return 1 ;;
+      *)         name="$1"; shift ;;
+    esac
+  done
+  [ -n "$name" ] || name="$(first_run_name)"
+  load_run "$name" || return 1
+
+  # 报告写到当前目录，别写进运行目录——那可能是共享盘、只读或别人的。
+  # 路径可以用 REPORT_DIR 配置改，也可以 --out 单次覆盖。
+  local target="${out:-${REPORT_DIR:-.}/exp-report-$R_NAME.html}"
+  local target_dir; target_dir="$(dirname "$target")"
+  if [ ! -d "$target_dir" ]; then
+    mkdir -p "$target_dir" || { echo "建不了输出目录：$target_dir" >&2; return 1; }
+  fi
+
+  printf '实验: %s\n' "$R_NAME"
+  printf '机器: %s\n' "$R_MACHINE"
+  printf '目录: %s\n' "$R_DIR"
+  printf '方法: %s\n' "$R_METHOD"
+  echo
+
+  local tmp; tmp="$(mktemp -d)"
+
+  # 1) 指标原始序列（JSON）。方法专用读取器不支持 --json 就退回通用读取器。
+  local reader; reader="$(reader_path "$R_METHOD")"
+  dump_series_json "$R_MACHINE" "$R_DIR" "$reader" > "$tmp/series.json"
+  if [ "$(head -c 1 "$tmp/series.json" 2>/dev/null)" != "{" ]; then
+    reader="$SELF_DIR/progress/generic.py"
+    dump_series_json "$R_MACHINE" "$R_DIR" "$reader" > "$tmp/series.json"
+  fi
+
+  # 2) 事前记录全文（判据、预测从里面挑）
+  run_on "$R_MACHINE" "cat '$R_DIR/$PLAN_FILE'" > "$tmp/plan.md"
+
+  # 3) 健康检查（和 exp status 同一份逻辑）
+  health_lines tsv > "$tmp/health.tsv"
+
+  # 4) 在本机渲染成一份自包含的 HTML（渲染器要读本机文件、写本机文件）
+  local py="${LOCAL_PYTHON:-$REMOTE_PYTHON}"
+  local renderer="$SELF_DIR/progress/report.py"
+  show_cmd "$py $renderer --out '$target' --name '$R_NAME' --machine '$R_MACHINE' --dir '$R_DIR' --method '$R_METHOD' --series-json $tmp/series.json --plan $tmp/plan.md --health $tmp/health.tsv"
+  if ! "$py" "$renderer" \
+        --out "$target" \
+        --name "$R_NAME" --machine "$R_MACHINE" --dir "$R_DIR" --method "$R_METHOD" \
+        --series-json "$tmp/series.json" --plan "$tmp/plan.md" --health "$tmp/health.tsv"; then
+    rm -rf "$tmp"
+    echo "生成失败。" >&2
+    return 1
+  fi
+  rm -rf "$tmp"
+
+  echo
+  echo "报告已生成：$target"
+  echo "单文件自包含，直接双击用浏览器打开即可（断网也能看）。"
 }
 
 confirm() {
@@ -412,6 +520,8 @@ exp —— 训练实验的统一入口
   exp attach [名字]        进 tmux 画面（退出按 Ctrl+B 再按 D）
   exp config [名字]        打印这个实验的 launch.sh
   exp plan [名字]          事前记录：没有就生成模板，有就打印全文
+  exp report [名字]        生成一份自包含的 HTML 报告（曲线 + 判据参考线 + 健康检查）
+                           默认写到 ./exp-report-<名字>.html，可用 --out 或 REPORT_DIR 改
   exp help                这份说明
 
 每条命令执行前都会打印它背后真正跑的命令（灰色的 + ...），
@@ -436,6 +546,7 @@ case "$cmd" in
   attach|at)        cmd_attach "$@" ;;
   config|conf)      cmd_config "$@" ;;
   plan|pl)          cmd_plan "$@" ;;
+  report|rep)       cmd_report "$@" ;;
   help|-h|--help)   usage ;;
   *)
     echo "不认识这个命令：$cmd" >&2

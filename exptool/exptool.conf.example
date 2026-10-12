@@ -16,6 +16,14 @@ SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=5"
 # 远端跑进度读取器用的解释器。读取器是从本地管道送过去的，远端不用装这个仓库。
 REMOTE_PYTHON="python3"
 
+# exp report 在本机渲染 HTML 用的解释器。留空就用 REMOTE_PYTHON
+# （local 模式下两者本来就是同一个）。
+LOCAL_PYTHON=""
+
+# exp report 默认把报告写到这里（相对当前目录）。默认当前目录——
+# 别写进运行目录，那可能是共享盘、只读或别人的。
+REPORT_DIR="."
+
 # 失败 / 完成的标记文件名。exp status 会在实验目录里找这两个文件。
 FAILED_MARKER="FAILED"
 DONE_MARKER="DONE"

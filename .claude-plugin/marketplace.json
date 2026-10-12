@@ -16,7 +16,8 @@
       "source": "./",
       "strict": false,
       "skills": [
-        "./"
+        "./",
+        "./skills/coach-drill"
       ]
     }
   ]

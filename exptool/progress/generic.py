@@ -156,6 +156,18 @@ def rank(name):
     return (0 if any(word in low for word in PREFER) else 1, name)
 
 
+def select_metrics(series, limit=DEFAULT_LIMIT, show_all=False):
+    """挑出要显示的指标名：默认滤掉 step/epoch 这类元数据，按 rank 排序，最多 limit 个。
+
+    单独抽出来给 exp report 复用——报告要跟 status 显示同一批指标。
+    """
+    names = list(series)
+    if not show_all:
+        kept = [name for name in names if name.lower() not in SKIP]
+        names = kept or names  # 全被过滤掉就不过滤，宁可多显示也别什么都不显示
+    return sorted(names, key=rank)[:limit]
+
+
 def segments(values, count):
     """把一段序列切成 count 段，返回每段的平均值。段数比点数还多时空段记 nan。"""
     total = len(values)
@@ -175,11 +187,7 @@ def fmt(value):
 
 
 def render(series, source, count, limit, show_all=False):
-    names = list(series)
-    if not show_all:
-        kept = [name for name in names if name.lower() not in SKIP]
-        names = kept or names  # 全被过滤掉就不过滤，宁可多显示也别什么都不显示
-    names = sorted(names, key=rank)[:limit]
+    names = select_metrics(series, limit, show_all)
     points = max(len(values) for values in series.values())
     count = max(1, min(count, points))
 
@@ -197,13 +205,28 @@ def render(series, source, count, limit, show_all=False):
         print(f"{name:<{width}} {cells} {fmt(segs[-1] - segs[0]):>10}")
 
 
+def dump_json(run_dir):
+    """把原始序列按 JSON 输出（给 exp report 画图用）。找不到指标就是空的 series。
+
+    和表格输出共用 collect()，所以「找哪个来源、怎么解析」只有一份实现。
+    """
+    series, source = collect(run_dir)
+    return json.dumps({"source": source, "series": series}, ensure_ascii=False)
+
+
 def main():
     parser = argparse.ArgumentParser(description="通用进度读取器")
     parser.add_argument("run_dir", help="某一次运行的目录")
     parser.add_argument("--segments", type=int, default=DEFAULT_SEGMENTS, help="切成几段（默认 8）")
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="最多显示几个指标（默认 6）")
     parser.add_argument("--all", action="store_true", help="连 step/epoch 这类元数据也一起显示")
+    parser.add_argument("--json", action="store_true", help="输出原始序列的 JSON（给 exp report 用）")
     args = parser.parse_args()
+
+    if args.json:
+        # 报告要画曲线，得拿逐步的原始值，而不是分段均值。没有指标也照常输出空壳。
+        print(dump_json(args.run_dir))
+        return 0
 
     series, source = collect(args.run_dir)
     if not series:

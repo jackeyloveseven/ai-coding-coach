@@ -136,6 +136,25 @@ def test_metric_preference_and_limit():
     check("默认只取 6 个", len(ordered[: generic.DEFAULT_LIMIT]), 6)
 
 
+def test_select_metrics():
+    """select_metrics 是 render 和 exp report 共用的选指标逻辑。"""
+    series = {"step": [1.0], "loss": [1.0], "zzz": [1.0]}
+    check("滤掉元数据并按 rank 排序", generic.select_metrics(series, limit=6), ["loss", "zzz"])
+    check("limit 生效", generic.select_metrics({"loss": [], "acc": [], "zzz": []}, limit=2), ["acc", "loss"])
+    check("show_all 时不滤元数据", generic.select_metrics(series, limit=6, show_all=True), ["loss", "step", "zzz"])
+
+
+def test_dump_json():
+    """exp report 靠 dump_json 拿逐步原始值。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        write(root / "metrics.jsonl", '{"loss": 1.0, "step": 1}\n{"loss": 0.5, "step": 2}\n')
+        data = json.loads(generic.dump_json(root))
+        check("json 里带来源", data["source"], "metrics.jsonl")
+        check("json 里带逐步序列", data["series"]["loss"], [1.0, 0.5])
+        check("json 保留 step 供画横轴", data["series"]["step"], [1.0, 2.0])
+
+
 def test_fmt():
     check("普通小数", generic.fmt(2.3145), "2.31")
     check("很小用科学计数法", generic.fmt(0.00012), "1.20e-04")
@@ -200,6 +219,8 @@ def main():
         test_text_metric_regex,
         test_segments,
         test_metric_preference_and_limit,
+        test_select_metrics,
+        test_dump_json,
         test_fmt,
         test_render_smoke,
         test_render_skips_metadata,

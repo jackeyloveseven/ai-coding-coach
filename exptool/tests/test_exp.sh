@@ -116,6 +116,31 @@ case "$(cat "$TMP/noplan/PLAN.md" 2>/dev/null)" in *"判据："*) pass "模板�
 out="$(planrun status half)"
 case "$out" in *"判据: 半角冒号也得能读出来"*) pass "半角冒号也能读出来" ;; *) fail "半角冒号没读出来" ;; esac
 
+echo "exp report demo-sft"
+RPT="$TMP/report.html"
+out="$(run report demo-sft --out "$RPT")"; code=$?
+[ $code -eq 0 ] && pass "退出码 0" || fail "退出码 $code"
+[ -f "$RPT" ] && pass "报告文件生成了" || fail "报告文件没生成"
+body="$(cat "$RPT" 2>/dev/null)"
+case "$body" in *"<!doctype html>"*) pass "是 HTML（有 doctype）" ;; *) fail "不是 HTML" ;; esac
+case "$body" in *"<svg"*) pass "含内联 SVG 曲线" ;; *) fail "没有内联 SVG" ;; esac
+case "$body" in *"loss"*) pass "含指标 loss" ;; *) fail "缺 loss" ;; esac
+case "$body" in *"grad_norm"*) pass "含指标 grad_norm" ;; *) fail "缺 grad_norm" ;; esac
+case "$body" in *"rewards/accuracies"*) pass "含指标 rewards/accuracies" ;; *) fail "缺 rewards/accuracies" ;; esac
+case "$body" in *"用固定 dev 集上的 eval loss"*) pass "含 PLAN.md 里的判据文字" ;; *) fail "缺判据文字" ;; esac
+case "$body" in *"判据 ≤"*) pass "判据画成了参考线" ;; *) fail "判据没画成参考线" ;; esac
+case "$body" in *"健康检查"*) pass "含健康检查" ;; *) fail "缺健康检查" ;; esac
+if printf '%s' "$body" | grep -qE 'https?://'; then fail "报告里有外部 URL"; else pass "没有任何外部 URL"; fi
+if printf '%s' "$body" | grep -qE '<link|src=|@import'; then fail "报告里有外部资源引用"; else pass "没有外部资源引用"; fi
+
+# 默认写到当前目录，不写进运行目录
+( cd "$TMP" && run report demo-sft >/dev/null 2>&1 )
+[ -f "$TMP/exp-report-demo-sft.html" ] && pass "默认写到 ./exp-report-<名字>.html" || fail "默认输出路径不对"
+
+echo "exp report 的错误路径"
+out="$(run report no-such-run)"; code=$?
+[ $code -ne 0 ] && pass "不认识的实验会报错" || fail "不认识的实验居然成功了"
+
 echo "错误路径"
 out="$(run nonsense)"; code=$?
 [ $code -ne 0 ] && pass "不认识的命令会报错" || fail "不认识的命令居然成功了"

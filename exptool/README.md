@@ -56,6 +56,7 @@ ln -s "$PWD/exp" ~/bin/exp
 | `exp attach [名字]` | 进 tmux 画面（退出按 Ctrl+B 再按 D） |
 | `exp config [名字]` | 打印这个实验的 `launch.sh` |
 | `exp plan [名字]` | 事前记录：没有就生成模板，有就打印全文 |
+| `exp report [名字]` | 生成一份自包含的 HTML 报告（曲线 + 判据参考线 + 健康检查） |
 
 ---
 
@@ -136,6 +137,7 @@ python3 progress/generic.py <运行目录>
 python3 progress/generic.py <运行目录> --segments 10   # 改段数（默认 8）
 python3 progress/generic.py <运行目录> --limit 8       # 多看几个指标（默认 6）
 python3 progress/generic.py <运行目录> --all           # 连 step/epoch 也一起显示
+python3 progress/generic.py <运行目录> --json          # 打原始序列的 JSON（exp report 画曲线用）
 ```
 
 输出长这样：
@@ -170,22 +172,52 @@ rewards/accuracies     0.584     0.716     0.795     0.854     0.886     0.906  
 
 ---
 
+## 报告：`exp report`
+
+`exp status` 是纯文本表格，但训练曲线本来就是图的东西——用表格看，正是 `training-run-literacy.md` 里批评的「盯单步」。`exp report` 把一次运行渲染成一份**自包含的 HTML**：
+
+```bash
+exp report demo-sft                        # 写到 ./exp-report-demo-sft.html
+exp report demo-sft --out ~/桌面/看看.html  # 换个地方
+```
+
+报告里有：
+
+- **实验信息**：名字、机器、目录、方法。
+- **事前记录**：`PLAN.md` 里的**判据**和**预测**。判据不只是印一行字——它会尽量落成图上的一条**紫色虚线 + 达标区**，把「跑之前定的标准」摆到读数的那一刻眼前。认得出指标和数值就画线，认不出就退化成图上方的一条**标注带**（不会瞎画）。
+- **趋势曲线**：每个指标一张内联 SVG，细线是逐步原始值、粗点线是分段均值，一眼看走向。
+- **分段均值表**：和 `exp status` 同一份 8 段均值。
+- **健康检查**：和 `exp status` 同一份逻辑（tmux、标记文件、日志更新、奖励服务）。
+
+几个刻意定下的约束：
+
+- **零依赖**。只用 Python 标准库，图是手写的内联 SVG，没有 matplotlib、没有 jinja2。整个仓库的「零依赖」不变。
+- **单文件自包含**。没有任何外部引用——无 CDN、无外链 CSS/JS、无外部图片。断网、离线、拷给别人都能直接双击打开。
+- **输出到当前目录**，不写进运行目录（那可能是共享盘、只读或别人的）。默认 `./exp-report-<名字>.html`，用 `--out <路径>` 或配置里的 `REPORT_DIR` 改。
+- 数据来源用**方法专用读取器**（没有就用 `generic.py`）；专用读取器要支持 `--json` 才会出现在报告里（`generic.py` 已经支持）。认不出指标也不影响出报告——判据和健康检查照常。
+
+渲染在本机跑（要读本机文件、写本机文件），所以配置里多了一项 `LOCAL_PYTHON`（留空就用 `REMOTE_PYTHON`）。
+
+---
+
 ## 哪些验证过，哪些没有
 
 这个工具是照着一份使用手册重写的（原实现不在手边），所以要说清楚边界：
 
 **在本地跑过、有测试覆盖的：**
 
-- `progress/generic.py` 的全部逻辑——来源优先级、坏数据跳过、日志文字解析、分段、指标筛选。46 项断言，`python3 tests/test_generic.py`
-- `exp list / status / config / plan / errors / help` 在 `local` 模式下的完整链路，事前记录的读取与生成（含全角/半角冒号两种写法），以及各种错误路径（不认识的命令、不认识的实验、登记表不存在）。25 项断言，`bash tests/test_exp.sh`
+- `progress/generic.py` 的全部逻辑——来源优先级、坏数据跳过、日志文字解析、分段、指标筛选，以及给 `exp report` 复用的 `select_metrics` / `dump_json`。52 项断言，`python3 tests/test_generic.py`
+- `exp list / status / config / plan / errors / report / help` 在 `local` 模式下的完整链路，事前记录的读取与生成（含全角/半角冒号两种写法），报告生成（文件落盘、含各指标名与 `PLAN.md` 判据文字、判据画成参考线、默认写到当前目录、文件里没有任何外部 URL），以及各种错误路径（不认识的命令、不认识的实验、登记表不存在）。39 项断言，`bash tests/test_exp.sh`
 
 **没有验证过的（没有集群可测）：**
 
-- 走 ssh 的那条路（`run_on` 的远端分支）——逻辑和本地分支对称，但没实跑过
+- 走 ssh 的那条路（`run_on` 的远端分支，含 `exp report` 的远端取序列）——逻辑和本地分支对称，但没实跑过
 - `exp start / stop / attach`——依赖 tmux，只在 `local` 模式之外用到
 - `exp gpu` 的 `nvidia-smi` 输出解析——按标准 csv 格式写的，没在真卡上试过
 - tensorboard 事件文件读取——需要装了 `tensorboard` 才能走到，本地没测
 - 奖励服务的 curl 探测
+- `exp report` 的判据解析只在 demo 那种写法（「比 baseline 低 0.02」）上试过。别的写法认不出指标或数值时会退化成标注带，不会画错线，但也没在更多写法上验证
+- 报告的浏览器渲染只在 Chrome 上看过一眼（含 `prefers-color-scheme` 暗色）；没在 Firefox / Safari 上核过
 
 这些地方如果不对，改起来都是几行的事，但请先拿一台机器试一下再用。
 

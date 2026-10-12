@@ -6,6 +6,8 @@
 
 面向初级 / 中级算法工程师。不追求写得比 AI 快，追求**审得动** AI。
 
+介绍页：<https://jackeyloveseven.github.io/ai-coding-coach/>
+
 ```
 /plugin install ai-coding-coach --marketplace jackeyloveseven/ai-coding-coach
 ```
@@ -39,24 +41,52 @@
 
 ---
 
-## 为什么做这个
+## 为什么做这个：四个失败模式
 
-在「日抛代码」的年代，写代码这件事本身在快速贬值。AI 几秒钟就能给你一版能跑的实现，语法、样板、调库，它都比你熟。
+写代码在快速贬值，「判断」没有。下面四条是初级算法工程师在 AI 时代最常摔的坑——这个仓库里的每一样东西，都对着其中一条。
 
-但代价是隐性的：**你越来越少做「判断」这个动作。**
+### #1 能跑通，但结果悄悄是错的
 
-- 这段代码能跑通，但它的口径对不对？
-- loss 降了，是真的学到东西，还是数据泄露了？
-- 这个指标涨了 3 个点，是改动有效，还是随机波动？
-- AI 说「已验证」，它到底验证了什么？
+**问题**：算法工程里最贵的 bug 不是报错，是**能跑、指标也出来了、但其实错了**。训练集和验证集的顺序反了、指标算在了增强后的数据上、loss 累加时样本数没除对——这些都不崩，只会让你在错误的结论上再走三个月。
 
-这些判断，恰恰是老工程师和新手之间最真实的差距。它不会因为 AI 变强而消失，反而因为 AI 产出变多而变得更值钱——你面前要审的东西变多了。
+**解法**：黄档的**读懂检查点**专门盯这个。改完代码附一段：关键行为什么这么写、**这段最可能悄悄错在哪**、你能直接跑的验证方式。清单见 [`references/practice-menu.md`](references/practice-menu.md)。
 
-这个 skill 的目标是：**让判断力随着每一次使用而增长，而不是让你在 AI 的产出面前越来越被动。**
+### #2 loss 降了，但不知道那是不是真的学到东西
 
-贯穿全篇的一条判断：
+**问题**：loss 一路降、指标涨了 3 个点——是改动有效，还是数据泄露、随机波动、reward hacking？**结果出来之后再决定「涨多少算有效」，几乎总会得出「有效」的结论。**
 
-> 分工的边界不在「谁写代码」，而在「谁对结果负责」。
+**解法**：**事前记录**（假设 / 对照 / 变量 / **判据** / 止损 / 预测）跑之前写完；`exp status` 再把**判据**印在指标正上方。读数那一刻，你被迫对照事前定下的标准。见 [`references/experiment-design.md`](references/experiment-design.md)。
+
+### #3 实验跑完了，下一步全靠感觉
+
+**问题**：继续还是停、换哪个参数、要不要加卡——这些决定没人替你做。AI 也不知道你的业务和数据，给不出可靠建议。
+
+**解法**：红档不给答案，给脚手架，请你先说出「我打算下一步做什么、为什么」，再对照。决定权在你。
+
+### #4 我越来越不做「判断」这个动作了
+
+**问题**：代码几乎都由 agent 写，你审得越来越少。判断力不是被 AI 拿走的，是你不再练习而退化的——它不会因为 AI 变强而消失，反而因为 AI 产出变多而更值钱。
+
+**解法**：掌握度台账按间隔复习（1 / 3 / 7 / 16 / 35 天）提醒到期主题，稳了的降一档、反复出错的升一档。想主动练就敲 `/coach-drill`。
+
+---
+
+> 贯穿全篇的一条判断：**分工的边界不在「谁写代码」，而在「谁对结果负责」。**
+
+---
+
+## 两个 skill 怎么分工
+
+这个仓库装两个 skill，按**谁能触发**分工：
+
+| skill | 触发方式 | 干什么 | 常驻成本 |
+|---|---|---|---|
+| `ai-coding-coach` | **自动**（model-invoked） | 常驻纪律。你写代码、调 bug、看日志时自动生效，顺手把你拉进判断 | ~240 token |
+| `/coach-drill` | **只有你手打**（user-invoked） | 显式编排。想主动练 15–25 分钟时敲它，从台账挑到期的主题带你练 | ~70 token |
+
+两个加起来，每次会话只多占 **约 310 token**（`claude plugin details` 自己算的），真正的内容（3.5k / 1.1k）只在你用到时才加载。所以常驻**不构成上下文负担**——一条 CLAUDE.md 规则、一个 MCP server 的描述，往往比这还贵。
+
+那 70 token 是 `coach-drill` 的 description：`disable-model-invocation` 只关掉了**自动触发**，描述仍然留在技能列表里，好让你知道有这扇门。
 
 ---
 
@@ -111,17 +141,16 @@
 
 ## 安装
 
-**方式一：当插件装（推荐）**
-
-在 Claude Code 会话里直接跑，一条命令装好：
+一条命令，在 Claude Code 会话里直接跑：
 
 ```
 /plugin install ai-coding-coach --marketplace jackeyloveseven/ai-coding-coach
 ```
 
-之后用 `/plugin` 看状态、更新、卸载。
+之后用 `/plugin` 看状态、更新、卸载。装好后新开一个会话即可，无需其他配置——skill 会在你写代码、改代码、调 bug、看训练日志、设计实验时自动生效。
 
-**方式二：克隆 skill 目录**
+<details>
+<summary><strong>不想用插件？也可以克隆 skill 目录</strong></summary>
 
 个人级（所有项目可用）：
 
@@ -141,7 +170,9 @@ git clone https://github.com/jackeyloveseven/ai-coding-coach "$env:USERPROFILE\.
 git clone https://github.com/jackeyloveseven/ai-coding-coach .claude/skills/ai-coding-coach
 ```
 
-装好后新开一个会话即可，无需其他配置。skill 会在你写代码、改代码、调 bug、看训练日志、设计实验时自动生效。
+> 这种方式只装到 `ai-coding-coach` **一个** skill，`/coach-drill` 不会跟着装上——要它就还是用插件装。另外 clone 方式不会自动更新，得自己 `git pull`。
+
+</details>
 
 ---
 
@@ -151,9 +182,14 @@ git clone https://github.com/jackeyloveseven/ai-coding-coach .claude/skills/ai-c
 ai-coding-coach/
 ├── .claude-plugin/
 │   └── marketplace.json                  # 插件清单，支持 /plugin install 一条命令安装
-├── .github/workflows/test.yml            # CI：ubuntu + windows 两个平台跑测试
-├── SKILL.md                              # 主入口：分档逻辑、三档做法、强度与预算
-├── references/
+├── .github/workflows/
+│   ├── test.yml                          # CI：ubuntu + windows 两个平台跑测试
+│   └── pages.yml                         # 把 site/ 发到 GitHub Pages
+├── site/index.html                       # 介绍页（单文件，无构建步骤）
+├── SKILL.md                              # 常驻 skill：分档逻辑、三档做法、强度与预算
+├── skills/
+│   └── coach-drill/SKILL.md              # /coach-drill：显式触发的练习会话
+├── references/                           # 两个 skill 共用，按需加载
 │   ├── training-run-literacy.md          # 训练日志、指标、实验状态、故障分诊
 │   ├── reviewing-ai-output.md            # 审查五步、AI 常见失误模式、改动地图、学习桩
 │   ├── experiment-design.md              # 事前记录、消融设计、论文复现协议
@@ -164,7 +200,9 @@ ai-coding-coach/
 │   └── ledger.py                         # 掌握度台账（仅标准库）
 └── exptool/                              # 配套工具：训练实验的统一入口
     ├── exp                               # 命令入口（bash）
-    ├── progress/generic.py               # 通用进度读取器
+    ├── progress/
+    │   ├── generic.py                    # 通用进度读取器（--json 给 exp report 画图用）
+    │   └── report.py                     # exp report 的渲染器：自包含 HTML，图是手写的 SVG
     └── tests/                            # 本地就能跑，不需要集群
 ```
 
@@ -209,6 +247,8 @@ python3 scripts/ledger.py card             # 导出可粘贴的学习卡
 2. **读数看趋势，不看单步**。把整段训练切成若干段比较均值。
 
 它还会读实验目录下的 `PLAN.md`（事前记录），把**判据**印在指标正上方。结果出来之后再定「涨多少算有效」，几乎总会得出「有效」；把判据摆在数字旁边，就没法自欺。没有 `PLAN.md` 时 `exp plan <名字>` 按六项生成模板。
+
+曲线本来就是图的东西，用表格看等于盯单步。`exp report <名字>` 把一次运行渲染成一份**单文件自包含的 HTML**——零外部引用，断网也能双击打开：趋势曲线（细线是逐步原始值，粗点线是分段均值）、8 段均值表、健康检查，以及判据的参考线。判据认得出指标和数值就画线，认不出就退化成图上方的一条标注带，不会瞎画；而当参照是从本次数据里推出来的时候，报告会写明「它不是判据本身，读数仍以 PLAN 里那句为准」。
 
 它是**脱敏的通用版**——主机名、共享盘路径、奖励服务地址全部走配置文件。本地就能试，不需要集群：
 
