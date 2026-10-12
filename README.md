@@ -78,7 +78,19 @@
 
 ## 安装
 
-**Claude Code（个人级，所有项目可用）**
+**方式一：当插件装（推荐）**
+
+在 Claude Code 会话里直接跑，一条命令装好：
+
+```
+/plugin install ai-coding-coach --marketplace jackeyloveseven/ai-coding-coach
+```
+
+之后用 `/plugin` 看状态、更新、卸载。
+
+**方式二：克隆 skill 目录**
+
+个人级（所有项目可用）：
 
 ```bash
 git clone https://github.com/jackeyloveseven/ai-coding-coach ~/.claude/skills/ai-coding-coach
@@ -90,7 +102,7 @@ Windows PowerShell：
 git clone https://github.com/jackeyloveseven/ai-coding-coach "$env:USERPROFILE\.claude\skills\ai-coding-coach"
 ```
 
-**Claude Code（项目级，只在这个仓库生效）**
+项目级（只在这个仓库生效）：
 
 ```bash
 git clone https://github.com/jackeyloveseven/ai-coding-coach .claude/skills/ai-coding-coach
@@ -104,6 +116,8 @@ git clone https://github.com/jackeyloveseven/ai-coding-coach .claude/skills/ai-c
 
 ```
 ai-coding-coach/
+├── .claude-plugin/
+│   └── marketplace.json                  # 插件清单，支持 /plugin install 一条命令安装
 ├── SKILL.md                              # 主入口：分档逻辑、三档做法、强度与预算
 ├── references/
 │   ├── training-run-literacy.md          # 训练日志、指标、实验状态、故障分诊
