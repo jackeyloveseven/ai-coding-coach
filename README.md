@@ -164,6 +164,7 @@ python3 scripts/ledger.py card             # 导出可粘贴的学习卡
 
 ```bash
 cd exptool
+chmod +x exp            # 从 GitHub 克隆下来会丢掉可执行位
 cp runs.conf.example runs.conf
 ./exp list && ./exp status demo-sft
 ```
