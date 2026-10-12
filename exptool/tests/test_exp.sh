@@ -83,6 +83,39 @@ echo "exp errors demo-sft"
 out="$(run errors demo-sft)"; code=$?
 [ $code -eq 0 ] && pass "退出码 0" || fail "退出码 $code"
 
+echo "事前记录（exp plan / status）"
+out="$(run status demo-sft)"
+case "$out" in *"判据: 用固定 dev 集"*) pass "status 把判据印在指标旁" ;; *) fail "status 没带出判据" ;; esac
+
+out="$(run plan demo-sft)"; code=$?
+[ $code -eq 0 ] && pass "exp plan 退出码 0" || fail "exp plan 退出码 $code"
+case "$out" in *"预算与止损"*) pass "打印了 PLAN.md 全文" ;; *) fail "没打印全文" ;; esac
+
+# 没写 / 半角冒号 两种实验，共用一份临时登记表
+mkdir -p "$TMP/noplan" "$TMP/halfwidth"
+printf '判据: 半角冒号也得能读出来\n' > "$TMP/halfwidth/PLAN.md"
+cat > "$TMP/plan-runs.conf" <<EOF
+名字   机器   目录             方法  tmux  说明
+fresh  local  $TMP/noplan      sft   -     没写事前记录
+half   local  $TMP/halfwidth   sft   -     半角冒号
+EOF
+cat > "$TMP/plan.conf" <<EOF
+RUNS_CONF="$TMP/plan-runs.conf"
+REMOTE_PYTHON="$PY"
+EOF
+planrun() { EXPT_CONF="$TMP/plan.conf" bash "$TOOL/exp" "$@" 2>&1; }
+
+out="$(planrun status fresh)"
+case "$out" in *"没有 PLAN.md"*) pass "没写时 status 会提醒" ;; *) fail "没写时 status 没提醒" ;; esac
+
+out="$(planrun plan fresh)"; code=$?
+[ $code -eq 0 ] && pass "exp plan 生成模板" || fail "生成模板失败（退出码 $code）"
+[ -f "$TMP/noplan/PLAN.md" ] && pass "PLAN.md 真的落盘了" || fail "PLAN.md 没落盘"
+case "$(cat "$TMP/noplan/PLAN.md" 2>/dev/null)" in *"判据："*) pass "模板里有判据一项" ;; *) fail "模板缺判据" ;; esac
+
+out="$(planrun status half)"
+case "$out" in *"判据: 半角冒号也得能读出来"*) pass "半角冒号也能读出来" ;; *) fail "半角冒号没读出来" ;; esac
+
 echo "错误路径"
 out="$(run nonsense)"; code=$?
 [ $code -ne 0 ] && pass "不认识的命令会报错" || fail "不认识的命令居然成功了"
