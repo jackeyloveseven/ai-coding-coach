@@ -1,0 +1,29 @@
+# exptool 配置模板。
+#
+# 用法：复制到 ~/.config/exptool/config，按自己的环境改。
+#   mkdir -p ~/.config/exptool
+#   cp exptool.conf.example ~/.config/exptool/config
+#
+# 这是个 shell 片段，会被 exp 直接 source。所以用 NAME=value，不要有空格。
+
+# 实验登记表的位置
+RUNS_CONF="$HOME/.config/exptool/runs.conf"
+
+# ssh 选项。BatchMode=yes 让 ssh 不要卡在密码提示上，直接失败。
+# 如果你靠密码登录，去掉 BatchMode 那一项。
+SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=5"
+
+# 远端跑进度读取器用的解释器。读取器是从本地管道送过去的，远端不用装这个仓库。
+REMOTE_PYTHON="python3"
+
+# 失败 / 完成的标记文件名。exp status 会在实验目录里找这两个文件。
+FAILED_MARKER="FAILED"
+DONE_MARKER="DONE"
+
+# 日志目录（相对实验目录）
+LOG_DIR="logs"
+
+# 奖励服务的健康检查地址（可选）。留空就跳过这项检查。
+# 填你自己的地址——别照抄别人文档里的。
+# 判据：返回 200 或 401 都算活着（401 只是没带凭证），000 是没响应。
+REWARD_HEALTH_URL=""
