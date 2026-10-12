@@ -4,7 +4,7 @@
 # 跑法：
 #   bash tests/test_exp.sh
 #
-# 想换个 python 解释器（比如 Windows 上要 py -X utf8），设 REMOTE_PYTHON 环境变量。
+# 解释器会自动探测（python3 / python / py），也可以用 REMOTE_PYTHON 环境变量指定。
 
 set -uo pipefail
 
@@ -18,7 +18,25 @@ fail() { printf '  FAIL %s\n' "$1"; FAILED=$((FAILED + 1)); }
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-PY="${REMOTE_PYTHON:-python3}"
+# 探测一个真的能跑的解释器。Windows 上 python3 往往是 Microsoft Store 的占位程序，
+# 执行时直接退出（不报错也不输出），会让所有涉及进度读取器的断言假失败。
+if [ -n "${REMOTE_PYTHON:-}" ]; then
+  PY="$REMOTE_PYTHON"
+else
+  PY=""
+  for cand in python3 python py; do
+    if command -v "$cand" >/dev/null 2>&1 && "$cand" -c 'pass' >/dev/null 2>&1; then
+      PY="$cand"; break
+    fi
+  done
+  if [ -z "$PY" ]; then
+    echo "找不到可用的 python 解释器（试过 python3 / python / py），用 REMOTE_PYTHON 指定一个。" >&2
+    exit 1
+  fi
+fi
+
+# 断言里有中文，必须让解释器按 UTF-8 输出；Windows 上默认按 GBK 写，中文匹配不上。
+export PYTHONIOENCODING=utf-8
 
 # 登记表用示例那份，机器列是 local，不走 ssh
 cat > "$TMP/config" <<EOF

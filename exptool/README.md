@@ -142,7 +142,7 @@ rewards/accuracies     0.584     0.716     0.795     0.854     0.886     0.906  
 **在本地跑过、有测试覆盖的：**
 
 - `progress/generic.py` 的全部逻辑——来源优先级、坏数据跳过、日志文字解析、分段、指标筛选。46 项断言，`python3 tests/test_generic.py`
-- `exp list / status / config / errors / help` 在 `local` 模式下的完整链路，以及各种错误路径（不认识的命令、不认识的实验、登记表不存在）。13 项断言，`bash tests/test_exp.sh`
+- `exp list / status / config / errors / help` 在 `local` 模式下的完整链路，以及各种错误路径（不认识的命令、不认识的实验、登记表不存在）。17 项断言，`bash tests/test_exp.sh`
 
 **没有验证过的（没有集群可测）：**
 
@@ -163,4 +163,9 @@ python3 tests/test_generic.py    # 进度读取器
 bash    tests/test_exp.sh        # exp 命令本身（只用 local 模式）
 ```
 
-Windows 上如果 `python3` 不存在，用 `py -X utf8` 代替，或者设 `REMOTE_PYTHON` 环境变量。
+Windows 上 `python3` 常常是 Microsoft Store 的占位程序（跑起来直接退出），直接用 `py` 代替即可：
+
+```bash
+py -X utf8 tests/test_generic.py
+bash    tests/test_exp.sh        # 这个会自己探测解释器，不用管
+```
