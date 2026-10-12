@@ -15,11 +15,12 @@
 
 ```bash
 cd exptool
-chmod +x exp            # 从 GitHub 克隆下来会丢掉可执行位，跑一次就好
 cp runs.conf.example runs.conf
 ./exp list              # 应该看到 demo-sft
 ./exp status demo-sft   # 看示例实验的进度
 ```
+
+> 用 zip 下载的话记得先 `chmod +x exp`；`git clone` 不需要，可执行位是带着的。
 
 `runs.conf.example` 里的机器列写的是 `local`，表示就在本机跑、不走 ssh。`examples/demo-sft/` 是一个假的实验目录，用来让你先看清输出长什么样。
 
@@ -36,7 +37,6 @@ cp runs.conf.example ~/.config/exptool/runs.conf
 `exp` 本身可以直接放在 `~/bin` 下：
 
 ```bash
-chmod +x exp
 ln -s "$PWD/exp" ~/bin/exp
 ```
 
