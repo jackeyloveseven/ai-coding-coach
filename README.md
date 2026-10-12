@@ -202,4 +202,4 @@ cp runs.conf.example runs.conf
 
 ## 许可
 
-尚未选择许可证。在添加之前，默认保留所有权利。
+[MIT](LICENSE)。拿去改、拿去用、拿去商用都行，保留版权声明即可。
