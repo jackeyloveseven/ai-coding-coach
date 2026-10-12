@@ -1,0 +1,7 @@
+# 用户自己的配置和登记表，不进仓库
+runs.conf
+exptool.conf
+
+# Python
+__pycache__/
+*.pyc

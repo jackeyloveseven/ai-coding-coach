@@ -1,0 +1,386 @@
+#!/usr/bin/env bash
+# exp —— 训练实验的统一入口：登记、查看、启停、续跑。
+#
+# 每条命令执行前都会打印它背后真正跑的那条命令（灰色的 + ...），
+# 方便你复制下来自己改着用。熟了以后不用这个工具也能干。
+#
+# 配置：默认读 ~/.config/exptool/config，可以用环境变量 EXPT_CONF 指定。
+# 没配过就从 exptool.conf.example 复制一份改。
+#
+# 设计上只有两个外部依赖：ssh（机器列不是 local 时）和 tmux（启停用）。
+# 查看类的命令不依赖 tmux，没装也能用。
+
+set -uo pipefail
+
+SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# ---- 默认配置，会被配置文件覆盖 -------------------------------------------
+RUNS_CONF="$SELF_DIR/runs.conf"
+REWARD_HEALTH_URL=""
+SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=5"
+REMOTE_PYTHON="python3"
+FAILED_MARKER="FAILED"
+DONE_MARKER="DONE"
+LOG_DIR="logs"
+# ---------------------------------------------------------------------------
+
+EXPT_CONF="${EXPT_CONF:-$HOME/.config/exptool/config}"
+if [ -f "$EXPT_CONF" ]; then
+  # shellcheck disable=SC1090
+  . "$EXPT_CONF"
+fi
+
+show_cmd() {
+  # 打到 stderr：stdout 要留给数据，不然命令回显会污染 $(...)
+  if [ -t 2 ]; then
+    printf '\033[90m+ %s\033[0m\n' "$*" >&2
+  else
+    printf '+ %s\n' "$*" >&2
+  fi
+}
+
+run_on() {
+  # run_on <机器|local> <命令>
+  local machine="$1"; shift
+  local cmd="$*"
+  if [ "$machine" = "local" ]; then
+    show_cmd "$cmd"
+    sh -c "$cmd"
+  else
+    show_cmd "ssh $machine $cmd"
+    # shellcheck disable=SC2086
+    ssh $SSH_OPTS "$machine" "$cmd"
+  fi
+}
+
+# 表格：用 Tab 分隔，交给 column 对齐（中文列宽也算得对）
+fmt_table() {
+  if command -v column >/dev/null 2>&1; then
+    column -t -s "$(printf '\t')"
+  else
+    cat
+  fi
+}
+
+runs_lines() {
+  if [ ! -f "$RUNS_CONF" ]; then
+    echo "找不到实验登记表：$RUNS_CONF" >&2
+    echo "先复制一份模板：cp $SELF_DIR/runs.conf.example $RUNS_CONF" >&2
+    return 1
+  fi
+  grep -vE '^[[:space:]]*(#|$)' "$RUNS_CONF"
+}
+
+find_run() {
+  local want="$1" line name
+  while IFS= read -r line; do
+    name="${line%%[[:space:]]*}"
+    if [ "$name" = "$want" ]; then
+      echo "$line"
+      return 0
+    fi
+  done < <(runs_lines)
+  echo "没有登记叫 $want 的实验。敲 exp list 看有哪些。" >&2
+  return 1
+}
+
+first_run_name() {
+  runs_lines | head -n 1 | awk '{print $1}'
+}
+
+resolve_dir() {
+  # 相对路径按登记表所在目录解析，写 ./examples/demo-sft 也能用
+  local dir="$1"
+  case "$dir" in
+    ./*) dir="${dir#./}" ;;
+  esac
+  case "$dir" in
+    /*|~*) echo "$dir" ;;
+    *) echo "$(dirname "$RUNS_CONF")/$dir" ;;
+  esac
+}
+
+# 解析一行登记，设置全局变量 R_NAME / R_MACHINE / R_DIR / R_METHOD / R_TMUX / R_NOTE
+load_run() {
+  local name="$1" line
+  line="$(find_run "$name")" || return 1
+  read -r R_NAME R_MACHINE R_DIR R_METHOD R_TMUX R_NOTE <<< "$line"
+  R_DIR="$(resolve_dir "$R_DIR")"
+  return 0
+}
+
+newest_log() {
+  run_on "$1" "find '$2/$LOG_DIR' -type f -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-" 2>/dev/null
+}
+
+cmd_list() {
+  if [ ! -f "$RUNS_CONF" ]; then
+    runs_lines >/dev/null || return 1
+  fi
+
+  # 每台机器只问一次 tmux，别每行都 ssh 一趟
+  local tmux_dump="" machine session
+  while IFS= read -r machine; do
+    [ -n "$machine" ] || continue
+    while IFS= read -r session; do
+      [ -n "$session" ] && tmux_dump="${tmux_dump}${machine} ${session}
+"
+    done <<< "$(run_on "$machine" "tmux list-sessions -F '#{session_name}' 2>/dev/null" 2>/dev/null || true)"
+  done <<< "$(runs_lines | awk '{print $2}' | sort -u)"
+
+  local line name dir method tmuxname note state
+  {
+    printf '名字\t机器\t方法\ttmux\t目录\n'
+    while IFS= read -r line; do
+      read -r name machine dir method tmuxname note <<< "$line"
+      if [ "$tmuxname" = "-" ]; then
+        state="-"
+      elif printf '%s' "$tmux_dump" | grep -qx "$machine $tmuxname"; then
+        state="在跑"
+      else
+        state="不在"
+      fi
+      printf '%s\t%s\t%s\t%s\t%s\n' "$name" "$machine" "$method" "$state" "$dir"
+    done < <(runs_lines)
+  } | fmt_table
+}
+
+cmd_gpu() {
+  local machine="${1:-}"
+  if [ -z "$machine" ]; then
+    echo "用法: exp gpu <机器>" >&2
+    return 1
+  fi
+  run_on "$machine" "nvidia-smi --query-gpu=index,memory.used,memory.total,utilization.gpu --format=csv,noheader,nounits" \
+    | awk -F', *' '
+      NF >= 4 {
+        free = $3 - $2
+        printf "  GPU %-3s %6s / %6s MiB 已用   利用率 %3s%%   %s\n", $1, $2, $3, $4, (free > $3 * 0.9 ? "<- 空" : "")
+      }
+      NF < 4 { print "  " $0 }'
+}
+
+cmd_status() {
+  local name="${1:-$(first_run_name)}"
+  load_run "$name" || return 1
+
+  printf '实验: %s\n' "$R_NAME"
+  printf '机器: %s\n' "$R_MACHINE"
+  printf '目录: %s\n' "$R_DIR"
+  printf '方法: %s\n' "$R_METHOD"
+  echo
+  echo "健康检查"
+
+  # tmux 还在不在
+  if [ "$R_TMUX" = "-" ]; then
+    echo "  tmux: -（这个实验不归 exp start/stop 管）"
+  elif run_on "$R_MACHINE" "tmux has-session -t '$R_TMUX' 2>/dev/null" >/dev/null 2>&1; then
+    echo "  tmux $R_TMUX: 在"
+  else
+    echo "  tmux $R_TMUX: 不在了 -> 敲 exp errors $R_NAME 看报错"
+  fi
+
+  # 标记文件
+  local marks
+  marks="$(run_on "$R_MACHINE" "for f in '$FAILED_MARKER' '$DONE_MARKER'; do [ -e \"$R_DIR/\$f\" ] && echo \"\$f\"; done" 2>/dev/null || true)"
+  if [ -z "$marks" ]; then
+    echo "  标记文件: 无"
+  else
+    echo "  标记文件: $(echo "$marks" | tr '\n' ' ')"
+  fi
+
+  # 日志最后更新
+  local newest mtime now mins
+  newest="$(newest_log "$R_MACHINE" "$R_DIR")"
+  if [ -z "$newest" ]; then
+    echo "  日志: 没找到（看 $R_DIR/$LOG_DIR）"
+  else
+    mtime="$(run_on "$R_MACHINE" "stat -c %Y '$newest' 2>/dev/null || stat -f %m '$newest' 2>/dev/null" 2>/dev/null || true)"
+    now="$(run_on "$R_MACHINE" "date +%s" 2>/dev/null || true)"
+    if [ -n "$mtime" ] && [ -n "$now" ]; then
+      mins=$(( (now - mtime) / 60 ))
+      echo "  日志最后更新: ${mins} 分钟前（$(basename "$newest")）"
+      if [ "$mins" -gt 30 ]; then
+        echo "    -> 超过 30 分钟没动，可能卡在奖励服务、NCCL 或死锁上"
+      fi
+    else
+      echo "  日志: $(basename "$newest")（读不到时间）"
+    fi
+  fi
+
+  # 奖励服务（配了才查）
+  if [ -n "$REWARD_HEALTH_URL" ]; then
+    local code
+    code="$(run_on "$R_MACHINE" "curl -s -o /dev/null -m 5 -w '%{http_code}' '$REWARD_HEALTH_URL'" 2>/dev/null || true)"
+    case "$code" in
+      200|401) echo "  奖励服务: 活着（HTTP $code）" ;;
+      000|"")  echo "  奖励服务: 没响应（HTTP ${code:-000}）-> 服务可能挂了" ;;
+      *)       echo "  奖励服务: HTTP $code" ;;
+    esac
+  fi
+
+  echo
+  echo "进度"
+  run_reader "$R_MACHINE" "$R_DIR" "$R_METHOD"
+}
+
+run_reader() {
+  local machine="$1" dir="$2" method="$3"
+  local base="${method%%-*}"     # awm-hps -> awm
+  local reader="$SELF_DIR/progress/$base.py"
+  [ -f "$reader" ] || reader="$SELF_DIR/progress/generic.py"
+
+  if [ "$machine" = "local" ]; then
+    show_cmd "$REMOTE_PYTHON $reader '$dir'"
+    "$REMOTE_PYTHON" "$reader" "$dir"
+  else
+    # 读取器从本地管道送过去，远端不用装任何东西
+    show_cmd "ssh $machine \"$REMOTE_PYTHON - '$dir'\" < $reader"
+    # shellcheck disable=SC2086
+    ssh $SSH_OPTS "$machine" "$REMOTE_PYTHON - '$dir'" < "$reader"
+  fi
+}
+
+cmd_log() {
+  local name="${1:-$(first_run_name)}"
+  load_run "$name" || return 1
+  local log
+  log="$(newest_log "$R_MACHINE" "$R_DIR")"
+  if [ -z "$log" ]; then
+    echo "在 $R_DIR/$LOG_DIR 里没找到日志。" >&2
+    return 1
+  fi
+  echo "实时看 $log（Ctrl+C 退出，训练不会停）" >&2
+  run_on "$R_MACHINE" "tail -f '$log'"
+}
+
+cmd_errors() {
+  local name="${1:-$(first_run_name)}"
+  load_run "$name" || return 1
+  run_on "$R_MACHINE" "grep -rn -E 'Traceback|Error|error:|FAILED|nan|out of memory' '$R_DIR/$LOG_DIR' 2>/dev/null | tail -40"
+}
+
+cmd_attach() {
+  local name="${1:-$(first_run_name)}"
+  load_run "$name" || return 1
+  if [ "$R_TMUX" = "-" ]; then
+    echo "$R_NAME 的 tmux 列是 -，没有可进的会话。" >&2
+    return 1
+  fi
+  if [ "$R_MACHINE" = "local" ]; then
+    show_cmd "tmux attach -t '$R_TMUX'"
+    tmux attach -t "$R_TMUX"
+  else
+    show_cmd "ssh -t $R_MACHINE tmux attach -t '$R_TMUX'"
+    # shellcheck disable=SC2086
+    ssh -t $SSH_OPTS "$R_MACHINE" "tmux attach -t '$R_TMUX'"
+  fi
+}
+
+cmd_config() {
+  local name="${1:-$(first_run_name)}"
+  load_run "$name" || return 1
+  run_on "$R_MACHINE" "cat '$R_DIR/launch.sh'"
+}
+
+confirm() {
+  printf '%s [y/N] ' "$1"
+  local answer
+  read -r answer
+  case "$answer" in
+    y|Y|yes|YES) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+cmd_start() {
+  local name="${1:-}"
+  if [ -z "$name" ]; then
+    echo "用法: exp start <名字>" >&2
+    return 1
+  fi
+  load_run "$name" || return 1
+  if [ "$R_TMUX" = "-" ]; then
+    echo "$R_NAME 的 tmux 列是 -，表示不归 exp start/stop 管。" >&2
+    echo "要自己起就手动敲：tmux new -d -s <名字> 'bash launch.sh'" >&2
+    return 1
+  fi
+
+  echo "启动前先看一眼 $R_MACHINE 的卡："
+  cmd_gpu "$R_MACHINE"
+  echo
+  if ! confirm "确认在 $R_MACHINE 上启动 $R_NAME（tmux: $R_TMUX）？"; then
+    echo "已取消。"
+    return 0
+  fi
+
+  run_on "$R_MACHINE" "cd '$R_DIR' && tmux new -d -s '$R_TMUX' 'bash launch.sh'"
+  echo "已启动。1-2 分钟后敲 exp log $R_NAME 确认模型正常加载。"
+  echo "提示：第一次跑先把步数设成 2 试通，再改成正式步数。"
+}
+
+cmd_stop() {
+  local name="${1:-}"
+  if [ -z "$name" ]; then
+    echo "用法: exp stop <名字>" >&2
+    return 1
+  fi
+  load_run "$name" || return 1
+  if [ "$R_TMUX" = "-" ]; then
+    echo "$R_NAME 的 tmux 列是 -，不归 exp stop 管。" >&2
+    return 1
+  fi
+
+  if ! confirm "确认停止 $R_NAME（tmux: $R_TMUX，在 $R_MACHINE 上）？"; then
+    echo "已取消。"
+    return 0
+  fi
+
+  run_on "$R_MACHINE" "tmux kill-session -t '$R_TMUX'"
+  echo "已停止。要续跑就敲 exp start $R_NAME。"
+}
+
+usage() {
+  cat <<EOF
+exp —— 训练实验的统一入口
+
+  exp list                登记了哪些实验，哪些还在跑
+  exp status [名字]        进度、指标趋势、健康检查（默认看登记表第一行那个）
+  exp log [名字]           实时滚动看日志（Ctrl+C 退出，训练不会停）
+  exp errors [名字]        搜报错
+  exp gpu <机器>           看某台机器的卡空不空
+  exp start <名字>         启动（先给你看 GPU，确认后才起）
+  exp stop <名字>          停止
+  exp attach [名字]        进 tmux 画面（退出按 Ctrl+B 再按 D）
+  exp config [名字]        打印这个实验的 launch.sh
+  exp help                这份说明
+
+每条命令执行前都会打印它背后真正跑的命令（灰色的 + ...），
+复制下来自己改着用，熟了以后不用这个工具也能干。
+
+配置文件: $EXPT_CONF
+登记表:   $RUNS_CONF
+EOF
+}
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+  list|ls)          cmd_list "$@" ;;
+  status|st)        cmd_status "$@" ;;
+  log|logs)         cmd_log "$@" ;;
+  errors|err)       cmd_errors "$@" ;;
+  gpu)              cmd_gpu "$@" ;;
+  start)            cmd_start "$@" ;;
+  stop)             cmd_stop "$@" ;;
+  attach|at)        cmd_attach "$@" ;;
+  config|conf)      cmd_config "$@" ;;
+  help|-h|--help)   usage ;;
+  *)
+    echo "不认识这个命令：$cmd" >&2
+    echo
+    usage
+    exit 1
+    ;;
+esac

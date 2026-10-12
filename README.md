@@ -112,8 +112,12 @@ ai-coding-coach/
 │   ├── question-bank.md                  # 出题原则、题型、按等级选题、种子题
 │   ├── mastery-ledger.md                 # 掌握等级、间隔复习、摸底、学习卡
 │   └── practice-menu.md                  # 先写后审、验证四件套、静默错误清单
-└── scripts/
-    └── ledger.py                         # 掌握度台账（仅标准库）
+├── scripts/
+│   └── ledger.py                         # 掌握度台账（仅标准库）
+└── exptool/                              # 配套工具：训练实验的统一入口
+    ├── exp                               # 命令入口（bash）
+    ├── progress/generic.py               # 通用进度读取器
+    └── tests/                            # 本地就能跑，不需要集群
 ```
 
 参考文件按需加载，不一次全读。
@@ -144,6 +148,27 @@ python3 scripts/ledger.py card             # 导出可粘贴的学习卡
 | 4 | 能找 bug、能教别人 |
 
 **证据必须是你做出来的**——答对自测、预测准、先写后审差异小、bug hunt 找到。自己说「我懂了」不算。
+
+---
+
+## 配套工具：exptool
+
+`references/training-run-literacy.md` 讲的是「怎么读训练日志、怎么判断实验状态」。`exptool/` 是那套方法的执行入口——把启动、查看、续跑实验收在一个 `exp` 命令里。
+
+设计上只有两条原则：
+
+1. **每条命令执行前都打印它背后真正跑的命令**（灰色的 `+ ssh ...`）。复制下来自己改着用，熟了以后不用这个工具也能干。
+2. **读数看趋势，不看单步**。把整段训练切成若干段比较均值。
+
+它是**脱敏的通用版**——主机名、共享盘路径、奖励服务地址全部走配置文件。本地就能试，不需要集群：
+
+```bash
+cd exptool
+cp runs.conf.example runs.conf
+./exp list && ./exp status demo-sft
+```
+
+细节和「哪些验证过、哪些没有」的清单见 [`exptool/README.md`](exptool/README.md)。
 
 ---
 
