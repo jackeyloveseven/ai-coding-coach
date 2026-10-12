@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ai-coding-coach</title>
+<meta name="description" content="面向初级 / 中级算法工程师的 Claude Code 插件：一边帮你写代码，一边把你教成能一眼看出 AI 哪里写错了的人。">
+<meta property="og:title" content="ai-coding-coach">
+<meta property="og:description" content="一边帮你写代码，一边把你教成能一眼看出 AI 哪里写错了的算法工程师。">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* ---------------------------------------------------------------------------
+   ai-coding-coach 落地页
+   布局：单栏正文（约 66 字宽）+ 全宽图，左侧对齐的编辑部式排布，
+        顶部一条窄导航。视觉母题取自这个仓库自己的世界：训练曲线、三档分诊、
+        终端回显。三个档位的绿/黄/红是语义色，不参与主题强调色。
+--------------------------------------------------------------------------- */
+:root{
+  /* --- 颜色 --- */
+  --bg:#f4f6f7;
+  --bg-grid:rgba(15,23,32,.045);
+  --surface:#ffffff;
+  --surface-2:#eef1f3;
+  --fg:#12181f;
+  --fg-soft:#3d4854;
+  --muted:#68757f;
+  --line:#d9dfe4;
+  --line-soft:#e7ebee;
+
+  --accent:#0b6f86;
+  --accent-ink:#075668;
+  --accent-wash:rgba(11,111,134,.09);
+
+  --tier-green:#17693f;
+  --tier-amber:#8a5a06;
+  --tier-red:#a8261c;
+
+  --term-bg:#0e141a;
+  --term-fg:#d5dde4;
+  --term-dim:#7d8b97;
+  --term-key:#79c8d8;
+  --term-str:#c3d98a;
+  --term-cmt:#5f6d79;
+
+  --shadow:0 1px 2px rgba(15,23,32,.05), 0 8px 24px -14px rgba(15,23,32,.28);
+
+  /* --- 字体 --- */
+  --sans:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Hiragino Sans GB', 'Source Han Sans SC', sans-serif;
+  --mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  /* --- 尺度 --- */
+  --col:44rem;
+  --gutter:20px;
+  --r-sm:5px;
+  --r-md:9px;
+
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0c1116;
+    --bg-grid:rgba(214,228,238,.035);
+    --surface:#131a21;
+    --surface-2:#182129;
+    --fg:#e4ebf1;
+    --fg-soft:#c2ccd5;
+    --muted:#93a1ad;
+    --line:#26313b;
+    --line-soft:#1d262e;
+
+    --accent:#4cc4d8;
+    --accent-ink:#7ed7e6;
+    --accent-wash:rgba(76,196,216,.12);
+
+    --tier-green:#54c98b;
+    --tier-amber:#e0ac48;
+    --tier-red:#ef7b70;
+
+    --term-bg:#080c10;
+    --term-fg:#cdd7df;
+    --term-dim:#6f7d8a;
+    --term-key:#79c8d8;
+    --term-str:#c3d98a;
+    --term-cmt:#5a6672;
+
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -16px rgba(0,0,0,.75);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0c1116;
+  --bg-grid:rgba(214,228,238,.035);
+  --surface:#131a21;
+  --surface-2:#182129;
+  --fg:#e4ebf1;
+  --fg-soft:#c2ccd5;
+  --muted:#93a1ad;
+  --line:#26313b;
+  --line-soft:#1d262e;
+
+  --accent:#4cc4d8;
+  --accent-ink:#7ed7e6;
+  --accent-wash:rgba(76,196,216,.12);
+
+  --tier-green:#54c98b;
+  --tier-amber:#e0ac48;
+  --tier-red:#ef7b70;
+
+  --term-bg:#080c10;
+  --term-fg:#cdd7df;
+  --term-dim:#6f7d8a;
+  --term-key:#79c8d8;
+  --term-str:#c3d98a;
+  --term-cmt:#5a6672;
+
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -16px rgba(0,0,0,.75);
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--sans);
+  font-size:16.5px;
+  line-height:1.75;
+  -webkit-font-smoothing:antialiased;
+  padding:0 var(--gutter);
+}
+/* 工程坐标纸：极淡的一层网格，只在背景里 */
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:0;
+  background-image:
+    linear-gradient(to right, var(--bg-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--bg-grid) 1px, transparent 1px);
+  background-size:28px 28px;
+}
+body > *{position:relative; z-index:1}
+
+.wrap{max-width:var(--col); margin:0 auto}
+.wide{max-width:52rem; margin:0 auto}
+
+a{color:var(--accent); text-decoration:none; text-underline-offset:.22em}
+a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:3px}
+
+h1,h2,h3{text-wrap:balance; line-height:1.28; margin:0; font-weight:600; letter-spacing:-.005em}
+h1{font-size:clamp(1.6rem, 1.15rem + 2.1vw, 2.5rem); line-height:1.3}
+h2{font-size:clamp(1.2rem, 1.05rem + .6vw, 1.5rem)}
+h3{font-size:1.02rem}
+p{margin:0}
+strong{font-weight:600}
+code{font-family:var(--mono); font-size:.88em}
+
+.eyebrow{
+  font-family:var(--mono);
+  font-size:.7rem;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.lede{font-size:1.06rem; color:var(--fg-soft)}
+.dim{color:var(--muted)}
+.small{font-size:.85rem}
+
+/* ---------- 顶部导航 ---------- */
+.top{
+  position:sticky; top:0; z-index:5;
+  margin:0 calc(var(--gutter) * -1);
+  padding:10px var(--gutter);
+  background:color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line-soft);
+}
+.top-in{max-width:52rem; margin:0 auto; display:flex; align-items:center; gap:18px}
+.brand{font-family:var(--mono); font-size:.83rem; font-weight:600; letter-spacing:-.01em; color:var(--fg); white-space:nowrap}
+.brand:hover{text-decoration:none; color:var(--accent)}
+.top nav{display:flex; gap:16px; margin-left:auto; flex-wrap:wrap}
+.top nav a{font-size:.83rem; color:var(--muted)}
+.top nav a:hover{color:var(--accent)}
+@media (max-width:640px){ .top nav{display:none} }
+#theme-toggle{
+  margin-left:auto;
+  font-family:var(--mono); font-size:.72rem;
+  color:var(--muted);
+  background:transparent;
+  border:1px solid var(--line);
+  border-radius:var(--r-sm);
+  padding:4px 9px;
+  cursor:pointer;
+  white-space:nowrap;
+}
+@media (min-width:641px){ #theme-toggle{margin-left:0} }
+#theme-toggle:hover{color:var(--accent); border-color:var(--accent)}
+
+/* ---------- 段落骨架 ---------- */
+section{padding-block:clamp(2.6rem, 1.6rem + 3.2vw, 4.2rem)}
+section + section{border-top:1px solid var(--line-soft)}
+.stack{display:flex; flex-direction:column; gap:1.1rem}
+.stack-lg{display:flex; flex-direction:column; gap:2rem}
+.stack-sm{display:flex; flex-direction:column; gap:.5rem}
+
+/* ---------- hero ---------- */
+.hero{padding-block:clamp(2.4rem, 1.2rem + 5vw, 4.4rem) clamp(2rem, 1.2rem + 3vw, 3.2rem)}
+.hero .lede{margin-top:1rem; max-width:34em}
+.tagline{color:var(--accent-ink); font-weight:500}
+
+.install{margin-top:1.6rem}
+.install-row{
+  display:flex; align-items:stretch; gap:0;
+  background:var(--term-bg);
+  border-radius:var(--r-md);
+  overflow:hidden;
+  box-shadow:var(--shadow);
+}
+.install-row code{
+  flex:1 1 auto; min-width:0;
+  font-size:.82rem;
+  color:var(--term-fg);
+  padding:13px 15px;
+  overflow-x:auto;
+  white-space:nowrap;
+}
+.install-row .prompt{color:var(--term-dim); user-select:none}
+#copy-install{
+  flex:0 0 auto;
+  font-family:var(--sans); font-size:.8rem;
+  color:var(--term-fg);
+  background:rgba(255,255,255,.07);
+  border:0; border-left:1px solid rgba(255,255,255,.1);
+  padding:0 16px; cursor:pointer; white-space:nowrap;
+}
+#copy-install:hover{background:rgba(255,255,255,.14)}
+.install-note{margin-top:.55rem; font-size:.82rem; color:var(--muted)}
+
+/* ---------- 图 ---------- */
+figure{margin:0}
+.chart{margin-top:2.4rem; overflow-x:auto}
+.chart svg{display:block; width:100%; min-width:460px; height:auto}
+.legend{display:flex; flex-wrap:wrap; gap:6px 18px; margin-bottom:10px; font-size:.8rem; color:var(--muted)}
+.legend span{display:inline-flex; align-items:center; gap:7px}
+.legend i{width:15px; height:2.5px; border-radius:2px; display:inline-block}
+figcaption{margin-top:.7rem; font-size:.83rem; color:var(--muted); max-width:40em}
+
+/* ---------- 三档 ---------- */
+.tiers{display:flex; flex-direction:column; gap:1px; background:var(--line-soft); border:1px solid var(--line-soft); border-radius:var(--r-md); overflow:hidden; margin-top:1.6rem}
+.tier{background:var(--surface); padding:18px 20px; display:grid; grid-template-columns:minmax(7.5rem, 9.5rem) 1fr; gap:4px 22px}
+.tier .name{display:flex; align-items:baseline; gap:9px; font-weight:600}
+.tier .dot{width:9px; height:9px; border-radius:50%; flex:0 0 auto; transform:translateY(-1px)}
+.tier .tasks{color:var(--fg-soft); font-size:.94rem}
+.tier .how{color:var(--muted); font-size:.87rem; grid-column:2}
+.t-green .dot{background:var(--tier-green)} .t-green .name{color:var(--tier-green)}
+.t-amber .dot{background:var(--tier-amber)} .t-amber .name{color:var(--tier-amber)}
+.t-red .dot{background:var(--tier-red)} .t-red .name{color:var(--tier-red)}
+@media (max-width:560px){
+  .tier{grid-template-columns:1fr; gap:5px}
+  .tier .how{grid-column:1}
+}
+
+/* ---------- 终端块 ---------- */
+.term{
+  background:var(--term-bg);
+  color:var(--term-fg);
+  border-radius:var(--r-md);
+  box-shadow:var(--shadow);
+  overflow:hidden;
+}
+.term-head{
+  font-family:var(--mono); font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--term-dim);
+  padding:9px 15px;
+  border-bottom:1px solid rgba(255,255,255,.07);
+  display:flex; align-items:center; gap:8px;
+}
+.term-head b{font-weight:500; color:var(--term-fg)}
+.term pre{margin:0; padding:15px; overflow-x:auto; font-family:var(--mono); font-size:.81rem; line-height:1.72}
+.term .c{color:var(--term-cmt)}
+.term .k{color:var(--term-key)}
+.term .s{color:var(--term-str)}
+.term .d{color:var(--term-dim)}
+
+.examples{display:grid; gap:1.4rem; margin-top:1.6rem}
+@media (min-width:900px){ .examples{grid-template-columns:1fr 1fr} }
+.ex-head{display:flex; align-items:center; gap:9px; margin-bottom:.6rem; font-size:.9rem; font-weight:600}
+.ex-head .dot{width:9px; height:9px; border-radius:50%}
+.ex-head.amber .dot{background:var(--tier-amber)} .ex-head.amber{color:var(--tier-amber)}
+.ex-head.red .dot{background:var(--tier-red)} .ex-head.red{color:var(--tier-red)}
+.checklist{margin:0; padding-left:1.1rem; display:flex; flex-direction:column; gap:.55rem; font-size:.92rem; color:var(--fg-soft)}
+.checklist li::marker{color:var(--muted)}
+.checklist b{color:var(--fg)}
+
+/* ---------- 失败模式 ---------- */
+.failures{display:grid; gap:1px; background:var(--line-soft); border:1px solid var(--line-soft); border-radius:var(--r-md); overflow:hidden; margin-top:1.6rem}
+@media (min-width:820px){ .failures{grid-template-columns:1fr 1fr} }
+.failure{background:var(--surface); padding:20px 22px; display:flex; flex-direction:column; gap:.5rem}
+.failure .num{font-family:var(--mono); font-size:.75rem; color:var(--muted); letter-spacing:.06em}
+.failure h3{font-size:1rem}
+.failure p{font-size:.9rem; color:var(--fg-soft)}
+.failure .fix{font-size:.88rem; color:var(--muted); border-top:1px dashed var(--line); padding-top:.6rem; margin-top:auto}
+.failure .fix b{color:var(--fg); font-weight:600}
+
+/* ---------- 表格 ---------- */
+.scroll-x{overflow-x:auto; margin-top:1.4rem}
+table{border-collapse:collapse; width:100%; min-width:30rem; font-size:.9rem}
+th,td{text-align:left; padding:11px 14px; border-bottom:1px solid var(--line-soft); vertical-align:top}
+th{font-size:.75rem; font-family:var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:500; border-bottom:1px solid var(--line)}
+tbody tr:last-child td{border-bottom:0}
+td code{background:var(--surface-2); padding:1px 6px; border-radius:4px; white-space:nowrap}
+.num-col{font-variant-numeric:tabular-nums; white-space:nowrap}
+
+/* ---------- 拉引言 ---------- */
+.pull{
+  margin-top:2.4rem;
+  border-left:2px solid var(--accent);
+  padding:.15rem 0 .15rem 1.2rem;
+  font-size:1.05rem;
+  color:var(--fg);
+}
+.pull b{color:var(--accent-ink)}
+
+/* ---------- 页脚 ---------- */
+footer{border-top:1px solid var(--line); padding-block:2.4rem 3rem; font-size:.87rem; color:var(--muted)}
+.foot-row{display:flex; flex-wrap:wrap; gap:.6rem 1.6rem; align-items:baseline}
+.foot-note{margin-top:1rem; max-width:44em}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.001ms !important; transition-duration:.001ms !important; scroll-behavior:auto !important}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="#top">ai-coding-coach</a>
+    <nav>
+      <a href="#tiers">三档</a>
+      <a href="#look">它长什么样</a>
+      <a href="#why">为什么</a>
+      <a href="#exptool">exptool</a>
+      <a href="#install">安装</a>
+    </nav>
+    <button id="theme-toggle" type="button" aria-label="切换深浅色">跟随系统</button>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ============ hero ============ -->
+<section class="hero">
+  <div class="wrap stack">
+    <p class="eyebrow">Claude Code 插件 · MIT</p>
+    <h1>一边帮你写代码，一边把你教成<br>能一眼看出 AI 哪里写错了的算法工程师</h1>
+    <p class="lede">面向初级 / 中级算法工程师。<span class="tagline">不追求写得比 AI 快，追求审得动 AI。</span></p>
+
+    <div class="install">
+      <div class="install-row">
+        <code id="install-cmd"><span class="prompt">$ </span>/plugin install ai-coding-coach --marketplace jackeyloveseven/ai-coding-coach</code>
+        <button id="copy-install" type="button" data-copy="install-cmd">复制</button>
+      </div>
+      <p class="install-note">在 Claude Code 会话里直接跑。装好后新开一个会话即可，无需其他配置。</p>
+    </div>
+  </div>
+
+  <figure class="wide chart">
+    <div class="legend">
+      <span><i style="background:var(--muted)"></i>train_loss</span>
+      <span><i style="background:var(--accent)"></i>val_loss</span>
+      <span><i style="background:var(--tier-amber)"></i>事前定下的判据</span>
+    </div>
+    <svg viewBox="0 0 720 250" role="img" aria-labelledby="chart-title chart-desc">
+      <title id="chart-title">一次 SFT 的 train_loss 与 val_loss 曲线</title>
+      <desc id="chart-desc">train_loss 从 2.30 一路降到 0.62；val_loss 在约 4000 步触底 0.89 后掉头回升到 0.99，只在 4000 到 5000 步之间擦到过事前定下的判据线 0.90。</desc>
+
+      <!-- 网格 -->
+      <g stroke="var(--line-soft)" stroke-width="1">
+        <line x1="56" y1="20.0" x2="700" y2="20.0"/>
+        <line x1="56" y1="65.2" x2="700" y2="65.2"/>
+        <line x1="56" y1="110.5" x2="700" y2="110.5"/>
+        <line x1="56" y1="155.7" x2="700" y2="155.7"/>
+        <line x1="56" y1="200.9" x2="700" y2="200.9"/>
+      </g>
+
+      <!-- 坐标轴 -->
+      <g stroke="var(--line)" stroke-width="1">
+        <line x1="56" y1="20" x2="56" y2="210"/>
+        <line x1="56" y1="210" x2="700" y2="210"/>
+      </g>
+
+      <!-- y 轴刻度 -->
+      <g fill="var(--muted)" font-family="var(--mono)" font-size="16" text-anchor="end">
+        <text x="47" y="26">2.5</text>
+        <text x="47" y="71">2.0</text>
+        <text x="47" y="116">1.5</text>
+        <text x="47" y="161">1.0</text>
+        <text x="47" y="206">0.5</text>
+      </g>
+      <!-- x 轴刻度 -->
+      <g fill="var(--muted)" font-family="var(--mono)" font-size="16" text-anchor="middle">
+        <text x="56" y="231">0</text>
+        <text x="217" y="231">2000</text>
+        <text x="378" y="231">4000</text>
+        <text x="539" y="231">6000</text>
+        <text x="700" y="231">8000</text>
+      </g>
+
+      <!-- 判据线 -->
+      <line x1="56" y1="164.8" x2="700" y2="164.8" stroke="var(--tier-amber)" stroke-width="2" stroke-dasharray="7 5"/>
+      <text x="62" y="158" fill="var(--tier-amber)" font-family="var(--mono)" font-size="16">判据 val_loss &lt; 0.90</text>
+
+      <!-- train_loss -->
+      <polyline fill="none" stroke="var(--muted)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"
+        points="56,38.1 136.5,99.6 217,135.8 297.5,157.5 378,170.2 458.5,178.3 539,183.8 619.5,187.4 700,190.1"/>
+      <!-- val_loss -->
+      <polyline fill="none" stroke="var(--accent)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"
+        points="56,32.7 136.5,92.4 217,130.4 297.5,153.9 378,163.9 458.5,165.7 539,163.0 619.5,159.3 700,156.6"/>
+      <!-- val 最低点 -->
+      <circle cx="458.5" cy="165.7" r="5" fill="var(--accent)" stroke="var(--bg)" stroke-width="2.5"/>
+
+      <!-- 标注 -->
+      <line x1="500" y1="80" x2="500" y2="157" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3"/>
+      <text x="440" y="50" fill="var(--fg)" font-family="var(--sans)" font-size="16">val 在 4000 步后掉头</text>
+      <text x="440" y="70" fill="var(--muted)" font-family="var(--sans)" font-size="16">后面只是在记住训练集</text>
+    </svg>
+    <figcaption>这不是「过拟合了，早点停」这么简单——<strong>跑之前你写下的判据是 val_loss &lt; 0.90，而这条线整段只被擦到过一次。</strong>结果出来之后再去定「涨多少算有效」，几乎总会得出「有效」。判据要事前写。</figcaption>
+  </figure>
+</section>
+
+<!-- ============ 三档 ============ -->
+<section id="tiers">
+  <div class="wrap">
+    <p class="eyebrow">分档</p>
+    <h2>每次任务先分档：用两个问题决定该教多少</h2>
+    <p class="lede" style="margin-top:.7rem">出错时后果有多隐蔽？亲手做一遍对判断力的价值有多大？拿不准时按黄档处理——宁可少教，也不在该打断的地方打断。</p>
+
+    <div class="tiers">
+      <div class="tier t-green">
+        <div class="name"><span class="dot"></span>绿：放手</div>
+        <div class="tasks">样板代码、argparse、日志、画图、shell 命令</div>
+        <div class="how">直接做好，<strong>不加教学</strong>。学 API 语法、调 matplotlib 样式不增值，说教只会烦人。</div>
+      </div>
+      <div class="tier t-amber">
+        <div class="name"><span class="dot"></span>黄：读懂</div>
+        <div class="tasks">数据处理、训练循环、loss 实现、评估代码、超参改动</div>
+        <div class="how">做完，附一个 6 行以内的<strong>「读懂检查点」</strong>：关键行为什么这么写、这段最可能悄悄错在哪、你能直接跑的验证方式。</div>
+      </div>
+      <div class="tier t-red">
+        <div class="name"><span class="dot"></span>红：亲手</div>
+        <div class="tasks">attention / loss / 采样 / 优化器、方案设计、实验设计、读数、决定下一步</div>
+        <div class="how">进入教练模式：先给脚手架，请你出手，再对照差异。决定权始终在你。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 它长什么样 ============ -->
+<section id="look">
+  <div class="wrap">
+    <p class="eyebrow">示例</p>
+    <h2>它长什么样</h2>
+    <p class="lede" style="margin-top:.7rem">下面是两段真实输出。左边是黄档的检查点，右边是红档的脚手架。</p>
+  </div>
+
+  <div class="wide examples">
+    <div>
+      <div class="ex-head amber"><span class="dot"></span>黄档 · 你贴一段评估代码给我看</div>
+      <div class="term">
+        <div class="term-head">读懂检查点 <b>6 行以内</b></div>
+        <pre><span class="c">-</span> <span class="k">关键行</span>：<span class="s">model.eval()</span> 和 <span class="s">torch.no_grad()</span> 缺一不可。
+  少了 <span class="s">eval()</span>，dropout 和 BatchNorm 还留在训练态，
+  指标会又抖又偏低 —— 而且<span class="k">不报错</span>。
+<span class="c">-</span> <span class="k">静默风险</span>：<span class="s">total += batch_loss</span> 没乘 batch size，
+  最后除以 <span class="s">len(loader)</span> 得到的是「每 batch 平均」。
+  最后一批样本不满时它会偏。
+  验证：跟「总 loss / 总样本数」对一下。
+<span class="c">-</span> <span class="k">先预测</span>：这段跑完，val_loss 和训练最后几个
+  step 的 train_loss 差多少？
+<span class="c">-</span> <span class="k">自测</span>：把 <span class="s">model.eval()</span> 删掉，指标会变好还是
+  变差？为什么？</pre>
+      </div>
+    </div>
+
+    <div>
+      <div class="ex-head red"><span class="dot"></span>红档 · 你要自己实现 DPO loss</div>
+      <div class="term">
+        <div class="term-head">不给答案，给脚手架</div>
+        <pre><span class="d">你写一版，我们再对照：</span>
+
+<span class="k">def</span> dpo_loss(policy_logps, ref_logps,
+             chosen, rejected, beta=<span class="s">0.1</span>):
+    <span class="s">"""返回 (loss, chosen_rewards, rejected_rewards)。
+    写完和官方实现比 torch.allclose。"""</span>
+
+<span class="d">一个提示：`beta` 在这份实现里应该出现</span>
+<span class="d">**两次**，想清楚分别为什么。</span>
+
+<span class="c">想直接要答案？回一句「直接给」，立刻给，不追问。</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 为什么 ============ -->
+<section id="why">
+  <div class="wrap">
+    <p class="eyebrow">动机</p>
+    <h2>四个失败模式</h2>
+    <p class="lede" style="margin-top:.7rem">写代码在快速贬值，「判断」没有。下面四条是初级算法工程师在 AI 时代最常摔的坑——这个仓库里的每一样东西，都对着其中一条。</p>
+
+    <div class="failures">
+      <div class="failure">
+        <div class="num">#1</div>
+        <h3>能跑通，但结果悄悄是错的</h3>
+        <p>最贵的 bug 不是报错，是能跑、指标也出来了、但其实错了。训练集和验证集顺序反了、指标算在了增强后的数据上、loss 累加时样本数没除对——这些都不崩，只会让你在错误的结论上再走三个月。</p>
+        <p class="fix"><b>解法</b>：黄档的「静默风险」专门盯这个，附一段你能直接跑的验证方式。</p>
+      </div>
+      <div class="failure">
+        <div class="num">#2</div>
+        <h3>loss 降了，但不知道那是不是真的学到东西</h3>
+        <p>loss 一路降、指标涨了 3 个点——是改动有效，还是数据泄露、随机波动、reward hacking？结果出来之后再决定「涨多少算有效」，几乎总会得出「有效」的结论。</p>
+        <p class="fix"><b>解法</b>：事前记录（假设 / 对照 / 变量 / <b>判据</b> / 止损 / 预测）跑之前写完，读数时判据就摆在指标正上方。</p>
+      </div>
+      <div class="failure">
+        <div class="num">#3</div>
+        <h3>实验跑完了，下一步全靠感觉</h3>
+        <p>继续还是停、换哪个参数、要不要加卡——这些决定没人替你做。AI 也不知道你的业务和数据，给不出可靠建议。</p>
+        <p class="fix"><b>解法</b>：红档不给答案，给脚手架，请你先说出「我打算下一步做什么、为什么」，再对照。</p>
+      </div>
+      <div class="failure">
+        <div class="num">#4</div>
+        <h3>我越来越不做「判断」这个动作了</h3>
+        <p>代码几乎都由 agent 写，你审得越来越少。判断力不是被 AI 拿走的，是你不再练习而退化的——它不会因为 AI 变强而消失，反而因为 AI 产出变多而更值钱。</p>
+        <p class="fix"><b>解法</b>：掌握度台账按 1 / 3 / 7 / 16 / 35 天间隔复习，稳了的降一档、反复出错的升一档。想主动练就敲 <code>/coach-drill</code>。</p>
+      </div>
+    </div>
+
+    <p class="pull">贯穿全篇的一条判断：<b>分工的边界不在「谁写代码」，而在「谁对结果负责」。</b></p>
+  </div>
+</section>
+
+<!-- ============ 两个 skill ============ -->
+<section id="skills">
+  <div class="wrap">
+    <p class="eyebrow">常驻成本</p>
+    <h2>两个 skill，按「谁能触发」分工</h2>
+    <p class="lede" style="margin-top:.7rem">装两个 skill，但真正的内容只在你用到时才加载。数字是 <code>claude plugin details</code> 自己算的。</p>
+
+    <div class="scroll-x">
+      <table>
+        <thead>
+          <tr><th>skill</th><th>触发方式</th><th>干什么</th><th class="num-col">常驻成本</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>ai-coding-coach</code></td>
+            <td>自动（model-invoked）</td>
+            <td>常驻纪律。你写代码、调 bug、看日志时自动生效，顺手把你拉进判断。</td>
+            <td class="num-col">~240 token</td>
+          </tr>
+          <tr>
+            <td><code>/coach-drill</code></td>
+            <td>只有你手打（user-invoked）</td>
+            <td>显式编排。想主动练 15–25 分钟时敲它，从台账挑到期的主题带你练。</td>
+            <td class="num-col">~70 token</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="small dim" style="margin-top:1rem">两个加起来，每次会话只多占 <strong>约 310 token</strong>。真正的内容（3.5k / 1.1k）只在你用到时才加载，所以常驻不构成上下文负担——一条 CLAUDE.md 规则、一个 MCP server 的描述，往往比这还贵。那 70 token 是 <code>/coach-drill</code> 的描述：<code>disable-model-invocation</code> 只关掉了自动触发，描述仍留在技能列表里，好让你知道有这扇门。</p>
+  </div>
+</section>
+
+<!-- ============ exptool ============ -->
+<section id="exptool">
+  <div class="wrap">
+    <p class="eyebrow">配套工具</p>
+    <h2>exptool：把事前记录接到训练日志上</h2>
+    <p class="lede" style="margin-top:.7rem">光有一条纪律没用，得让它在正确的时刻出现在你眼前。<code>exp</code> 读实验目录下的 <code>PLAN.md</code>，把<strong>判据</strong>印在指标正上方。</p>
+
+    <div class="term" style="margin-top:1.6rem">
+      <div class="term-head">$ <b>exp status demo-sft</b></div>
+      <pre><span class="d">实验: demo-sft
+机器: local
+目录: ./examples/demo-sft
+方法: sft</span>
+
+<span class="d">健康检查</span>
+  tmux train-demo: 在
+  日志最后更新: 2 分钟前（train.log）
+
+<span class="d">事前记录</span>
+  <span class="k">判据</span>: 用固定 dev 集上的 eval loss 判断，比 baseline 低 0.02 以上才算有效
+  <span class="k">预测</span>: 我觉得 eval loss 会低 0.01~0.03，把握中
+  <span class="d">（全文: exp plan demo-sft）</span>
+
+<span class="d">进度</span>
+  step  <span class="s">4200</span>/8000    loss <span class="s">0.84</span>    eval loss <span class="s">0.91</span>
+  <span class="c">读数看趋势，不看单步</span></pre>
+    </div>
+
+    <div class="scroll-x">
+      <table>
+        <thead><tr><th>命令</th><th>干什么</th></tr></thead>
+        <tbody>
+          <tr><td><code>exp list</code></td><td>登记了哪些实验，哪些还在跑</td></tr>
+          <tr><td><code>exp status</code></td><td>进度、指标趋势、健康检查，外加事前记录的判据</td></tr>
+          <tr><td><code>exp plan</code></td><td>没有 <code>PLAN.md</code> 就按六项生成模板，有就打印全文</td></tr>
+          <tr><td><code>exp report</code></td><td>生成一份自包含的 HTML 报告：曲线 + 判据参考线 + 健康检查</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="small dim" style="margin-top:1rem">每条命令执行前都会打印它背后真正跑的命令（灰色的 <code>+ ssh ...</code>）。复制下来自己改着用，熟了以后不用这个工具也能干。它是脱敏的通用版：主机名、共享盘路径、奖励服务地址全部走配置文件，本地就能试，不需要集群。</p>
+  </div>
+</section>
+
+<!-- ============ 安装 ============ -->
+<section id="install">
+  <div class="wrap">
+    <p class="eyebrow">安装</p>
+    <h2>一条命令</h2>
+
+    <div class="install" style="margin-top:1.4rem">
+      <div class="install-row">
+        <code id="install-cmd-2"><span class="prompt">$ </span>/plugin install ai-coding-coach --marketplace jackeyloveseven/ai-coding-coach</code>
+        <button type="button" data-copy="install-cmd-2">复制</button>
+      </div>
+      <p class="install-note">之后用 <code>/plugin</code> 看状态、更新、卸载。装好后新开一个会话即可。</p>
+    </div>
+
+    <p style="margin-top:1.6rem" class="small dim">
+      不想用插件，也可以克隆 skill 目录（只装到 <code>ai-coding-coach</code> 一个 skill，<code>/coach-drill</code> 不会跟着装上，而且不会自动更新）：
+    </p>
+    <div class="term" style="margin-top:.7rem">
+      <div class="term-head">git</div>
+      <pre>git clone https://github.com/jackeyloveseven/ai-coding-coach \
+  ~/.claude/skills/ai-coding-coach</pre>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wide">
+    <div class="foot-row">
+      <a href="https://github.com/jackeyloveseven/ai-coding-coach">GitHub 仓库</a>
+      <a href="https://github.com/jackeyloveseven/ai-coding-coach/blob/main/LICENSE">MIT 许可</a>
+      <a href="https://github.com/jackeyloveseven/ai-coding-coach/issues">Issue / PR</a>
+    </div>
+    <p class="foot-note">
+      <strong>早期版本。</strong>这份 skill 是在实际使用中逐步长出来的，很多判断来自个人经验而非系统验证，欢迎按你自己的情况改。目前主要面向扩散模型 / RL 后训练方向的训练实验场景，其他场景需要自己调。
+    </p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ---- 深浅色：跟随系统为默认，手选后记住 ---- */
+  var root = document.documentElement;
+  var KEY = 'aicc-theme';
+  var btn = document.getElementById('theme-toggle');
+
+  function read(){
+    try { return localStorage.getItem(KEY); } catch (e) { return null; }
+  }
+  function write(v){
+    try { v ? localStorage.setItem(KEY, v) : localStorage.removeItem(KEY); } catch (e) {}
+  }
+  function paintLabel(){
+    var cur = root.getAttribute('data-theme');
+    btn.textContent = cur === 'dark' ? '深色' : cur === 'light' ? '浅色' : '跟随系统';
+    btn.setAttribute('aria-label',
+      cur === 'dark' ? '当前深色，点击切换到浅色'
+      : cur === 'light' ? '当前浅色，点击切换到跟随系统'
+      : '当前跟随系统，点击切换到深色');
+  }
+
+  var saved = read();
+  if (saved === 'dark' || saved === 'light') root.setAttribute('data-theme', saved);
+  paintLabel();
+
+  btn.addEventListener('click', function(){
+    var cur = root.getAttribute('data-theme');
+    var next;
+    if (!cur) {
+      next = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    } else if (cur === 'dark') {
+      next = 'light';
+    } else {
+      next = null;               // 浅 -> 回到跟随系统
+    }
+    if (next) root.setAttribute('data-theme', next);
+    else root.removeAttribute('data-theme');
+    write(next);
+    paintLabel();
+  });
+
+  /* ---- 复制安装命令 ---- */
+  function bindCopy(btn){
+    var target = document.getElementById(btn.getAttribute('data-copy'));
+    if (!target) return;
+    var original = btn.textContent;
+
+    function flash(msg){
+      btn.textContent = msg;
+      window.setTimeout(function(){ btn.textContent = original; }, 1700);
+    }
+    function selectAll(){
+      try {
+        var range = document.createRange();
+        range.selectNodeContents(target);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } catch (e) {}
+    }
+
+    btn.addEventListener('click', function(){
+      var text = target.textContent.replace(/^\s*\$\s*/, '').trim();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          function(){ flash('已复制'); },
+          function(){ selectAll(); flash('已选中'); }
+        );
+      } else {
+        selectAll();
+        flash('已选中');
+      }
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-copy]'), bindCopy);
+})();
+</script>
+
+</body>
+</html>
