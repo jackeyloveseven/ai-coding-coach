@@ -1,0 +1,11 @@
+[step 1] loss=2.7123 reward: 0.5231
+[step 7] loss=1.9104 reward: 0.6387
+[step 13] loss=1.3729 reward: 0.7230
+[step 19] loss=1.0126 reward: 0.7845
+[step 25] loss=0.7711 reward: 0.8293
+[step 31] loss=0.6092 reward: 0.8620
+[step 37] loss=0.5007 reward: 0.8858
+[step 43] loss=0.4279 reward: 0.9032
+[step 49] loss=0.3791 reward: 0.9159
+[step 55] loss=0.3465 reward: 0.9251
+[step 61] loss=0.3245 reward: 0.9318

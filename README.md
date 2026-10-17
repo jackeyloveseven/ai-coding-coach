@@ -1,5 +1,9 @@
 # ai-coding-coach
 
+[![tests](https://github.com/jackeyloveseven/ai-coding-coach/actions/workflows/test.yml/badge.svg)](https://github.com/jackeyloveseven/ai-coding-coach/actions/workflows/test.yml)
+
+> **You are on the `pro` branch.** This is the Community edition plus the tooling — `exptool/` and `scripts/ledger.py`. The Community edition on its own is the `main` branch. Covered by [LICENSE-COMMERCIAL](LICENSE-COMMERCIAL).
+
 > **Writes code with you, and turns you into an engineer who can see at a glance where the AI got it wrong.**
 
 For early- and mid-career ML engineers. The goal isn't to type faster than the AI. It's to be able to **review** the AI.
