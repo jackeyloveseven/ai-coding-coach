@@ -1,6 +1,6 @@
 # ai-coding-coach
 
-[![tests](https://github.com/jackeyloveseven/ai-coding-coach/actions/workflows/test.yml/badge.svg)](https://github.com/jackeyloveseven/ai-coding-coach/actions/workflows/test.yml)
+[![tests](https://github.com/jackeyloveseven/ai-coding-coach/actions/workflows/test.yml/badge.svg?branch=pro)](https://github.com/jackeyloveseven/ai-coding-coach/actions/workflows/test.yml?query=branch%3Apro)
 
 > **You are on the `pro` branch.** This is the Community edition plus the tooling — `exptool/` and `scripts/ledger.py`. The Community edition on its own is the `main` branch. Covered by [LICENSE-COMMERCIAL](LICENSE-COMMERCIAL).
 
