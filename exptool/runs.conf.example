@@ -1,18 +1,20 @@
-# 实验登记表。一行一个实验，六列，用空格或 Tab 分隔。
-# 以 # 开头的行和空行会被忽略。
+# Runs registry. One run per line, six columns, separated by spaces or tabs.
+# Lines starting with # and blank lines are ignored.
 #
-#   名字   机器   目录   方法   tmux   说明
+#   name   machine   dir   method   tmux   note
 #
-# 名字    随便取，不和别人重复就行。exp status / log / start 都用它。
-# 机器    ssh 得通的主机名。写 local 表示就在本机跑，不走 ssh。
-# 目录    要写到具体那一次运行。比如 SFT 下面同时有 smoke/ 和 formal/，
-#         就写到 formal/，否则两次运行的记录会混在一起。
-#         相对路径按这张表所在目录解析。
-# 方法    决定用哪个脚本看进度：找 progress/<方法里 - 前面那段>.py。
-#         awm-hps 会去找 progress/awm.py。找不到就用 progress/generic.py。
-#         所以 sft、dpo、diffusionnft 不写任何代码也能直接看。
-# tmux    写 - 表示不归 exp start/stop 管（别人起的，或者已经结束了）。
-# 说明    随便写，最后一个字段，可以带空格。
+# name     Anything, as long as it's unique. exp status / log / start all use it.
+# machine  A hostname ssh can reach. Write local to run on this machine, skipping ssh.
+# dir      Point at the individual run. If one SFT experiment has both smoke/ and
+#          formal/ under it, write formal/, or the records from the two runs get
+#          mixed together. Relative paths resolve against this file's directory.
+# method   Decides which script reads progress: it looks for
+#          progress/<the part of method before the ->.py.
+#          awm-hps looks for progress/awm.py. With no match it falls back to
+#          progress/generic.py, so sft, dpo and diffusionnft work with no code.
+# tmux     Write - to say exp start/stop doesn't manage this run (someone else
+#          started it, or it has already finished).
+# note     Anything. Last field, so it may contain spaces.
 
-# 名字             机器    目录                   方法      tmux   说明
-demo-sft          local   ./examples/demo-sft    sft       -      示例：本地就能跑，不需要集群
+# name             machine  dir                    method   tmux   note
+demo-sft          local   ./examples/demo-sft    sft       -      example: runs locally, no cluster needed

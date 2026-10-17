@@ -1,25 +1,29 @@
 #!/usr/bin/env python3
-"""专用进度读取器的模板。复制成 progress/<你的方法>.py，把读文件那段改成你的格式。
+"""Template for a method-specific progress reader. Copy it to
+progress/<your method>.py and replace the file-reading part with your format.
 
-exp 找读取器的规则：方法列写 `awm-hps`，就找 `progress/awm.py`（只看 `-` 前面那段）。
-找不到就用 `progress/generic.py`。所以 sft、dpo、diffusionnft 不写任何代码也能直接看。
+How exp finds a reader: a method column of `awm-hps` looks for `progress/awm.py`
+(the part before the `-`). With no match it falls back to `progress/generic.py`.
+So sft, dpo and diffusionnft work with no code at all.
 
-什么时候需要专用读取器：当这个方法的收益不能靠训练 loss 看出来的时候。
-典型是 RL 那类——训练奖励每步换题，跳动很大，盯着看没有信息量。
-真正说明问题的是**固定评测集**上的分数。这个模板就是读那个的。
+When you need a dedicated reader: when the method's payoff can't be read off the
+training loss. RL-style methods are the usual case - the training reward changes
+prompts every step and swings wildly, so staring at it tells you nothing. What
+actually shows progress is the score on a **fixed eval set**, and this template
+reads that.
 
-约定（改成你自己的格式就行，这里只是给个例子）：
-  读 <运行目录>/eval.jsonl，每行一次评测
+Convention (replace it with your own format; this is just an example):
+  read <run dir>/eval.jsonl, one evaluation per line
   {"step": 200, "change": 0.12, "improved": 70, "total": 128}
-    step      第几步做的这次评测
-    change    相对起点的平均变化
-    improved  变好的样本数
-    total     评测集总样本数
+    step      which step this evaluation was run at
+    change    mean change relative to the starting point
+    improved  number of examples that got better
+    total     number of examples in the eval set
 
-输出：把起点、最新、最好各报一行，并给出趋势。
+Output: one line each for the start, the latest and the best, plus the trend.
 
-跑法和其他读取器一样：
-  python3 progress/example.py <运行目录>
+Run it the same way as the other readers:
+  python3 progress/example.py <run dir>
 """
 
 import json
@@ -32,8 +36,8 @@ EVAL_FILE = "eval.jsonl"
 def load(run_dir):
     path = Path(run_dir) / EVAL_FILE
     if not path.is_file():
-        print(f"没找到 {path}")
-        print(f"这个读取器读的是 {EVAL_FILE}，一行一次评测：")
+        print(f"{path} not found")
+        print(f"this reader reads {EVAL_FILE}, one evaluation per line:")
         print('  {"step": 200, "change": 0.12, "improved": 70, "total": 128}')
         return []
     rows = []
@@ -52,7 +56,7 @@ def load(run_dir):
 
 def main():
     if len(sys.argv) != 2:
-        print("用法: example.py <运行目录>")
+        print("usage: example.py <run dir>")
         return 1
 
     rows = load(sys.argv[1])
@@ -68,15 +72,15 @@ def main():
             text += f"  improved {row['improved']}/{row['total']}"
         return text
 
-    print(f"固定评测集 ｜ 共 {len(rows)} 次评测")
-    print(line("起点", first))
-    print(line("最新", last))
-    print(line("最好", best))
+    print(f"fixed eval set | {len(rows)} evaluations")
+    print(line("start", first))
+    print(line("latest", last))
+    print(line("best", best))
 
     delta = last["change"] - first["change"]
-    print(f"  最新比起点: {delta:+.3f}")
+    print(f"  latest vs start: {delta:+.3f}")
     if delta <= 0:
-        print("  -> 没有涨。先确认评测口径没变，再怀疑方法本身。")
+        print("  -> no gain. Confirm the evaluation setup hasn't changed before suspecting the method.")
 
 
 if __name__ == "__main__":

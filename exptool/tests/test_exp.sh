@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# exp 的冒烟测试。只用 local 模式：不需要集群，不需要 tmux，不需要 ssh。
+# Smoke tests for exp. Local mode only: no cluster, no tmux, no ssh needed.
 #
-# 跑法：
+# Run it with:
 #   bash tests/test_exp.sh
 #
-# 解释器会自动探测（python3 / python / py），也可以用 REMOTE_PYTHON 环境变量指定。
+# The interpreter is auto-detected (python3 / python / py), or set REMOTE_PYTHON.
 
 set -uo pipefail
 
@@ -18,8 +18,9 @@ fail() { printf '  FAIL %s\n' "$1"; FAILED=$((FAILED + 1)); }
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-# 探测一个真的能跑的解释器。Windows 上 python3 往往是 Microsoft Store 的占位程序，
-# 执行时直接退出（不报错也不输出），会让所有涉及进度读取器的断言假失败。
+# Find an interpreter that actually runs. On Windows, python3 is often the
+# Microsoft Store stub, which exits without doing anything (no error, no output)
+# and would make every assertion involving the progress reader fail spuriously.
 if [ -n "${REMOTE_PYTHON:-}" ]; then
   PY="$REMOTE_PYTHON"
 else
@@ -30,21 +31,22 @@ else
     fi
   done
   if [ -z "$PY" ]; then
-    echo "找不到可用的 python 解释器（试过 python3 / python / py），用 REMOTE_PYTHON 指定一个。" >&2
+    echo "no usable python interpreter found (tried python3 / python / py); set REMOTE_PYTHON." >&2
     exit 1
   fi
 fi
 
-# 断言里有中文，必须让解释器按 UTF-8 输出；Windows 上默认按 GBK 写，中文匹配不上。
+# PLAN files may hold non-ASCII text (the reader accepts Chinese field names too),
+# so make the interpreter emit UTF-8 rather than the platform default.
 export PYTHONIOENCODING=utf-8
 
-# 登记表用示例那份，机器列是 local，不走 ssh
+# Use the example registry; its machine column is local, so nothing goes over ssh
 cat > "$TMP/config" <<EOF
 RUNS_CONF="$TOOL/runs.conf.example"
 REMOTE_PYTHON="$PY"
 EOF
 
-# 找不到登记表的情况
+# The missing-registry case
 cat > "$TMP/bad.conf" <<EOF
 RUNS_CONF="$TMP/does-not-exist.conf"
 REMOTE_PYTHON="$PY"
@@ -54,50 +56,50 @@ run() { EXPT_CONF="$TMP/config" bash "$TOOL/exp" "$@" 2>&1; }
 
 echo "exp help"
 out="$(run help)"; code=$?
-[ $code -eq 0 ] && pass "退出码 0" || fail "退出码 $code"
-case "$out" in *"exp status"*) pass "列出了 status" ;; *) fail "没列出 status" ;; esac
+[ $code -eq 0 ] && pass "exit code 0" || fail "exit code $code"
+case "$out" in *"exp status"*) pass "lists status" ;; *) fail "does not list status" ;; esac
 
 echo "exp list"
 out="$(run list)"; code=$?
-[ $code -eq 0 ] && pass "退出码 0" || fail "退出码 $code"
-case "$out" in *demo-sft*) pass "能看到 demo-sft" ;; *) fail "看不到 demo-sft" ;; esac
+[ $code -eq 0 ] && pass "exit code 0" || fail "exit code $code"
+case "$out" in *demo-sft*) pass "sees demo-sft" ;; *) fail "cannot see demo-sft" ;; esac
 
 echo "exp status demo-sft"
 out="$(run status demo-sft)"; code=$?
-[ $code -eq 0 ] && pass "退出码 0" || fail "退出码 $code"
-case "$out" in *metrics.jsonl*) pass "找到了指标来源" ;; *) fail "没找到指标来源" ;; esac
-case "$out" in *loss*) pass "显示了 loss" ;; *) fail "没有 loss" ;; esac
-case "$out" in *"step "*) fail "混进了 step 元数据" ;; *) pass "没混进 step 元数据" ;; esac
-case "$out" in *"切 8 段"*) pass "默认切 8 段" ;; *) fail "没切 8 段" ;; esac
+[ $code -eq 0 ] && pass "exit code 0" || fail "exit code $code"
+case "$out" in *metrics.jsonl*) pass "found the metric source" ;; *) fail "did not find the metric source" ;; esac
+case "$out" in *loss*) pass "shows loss" ;; *) fail "no loss" ;; esac
+case "$out" in *"step "*) fail "step metadata leaked in" ;; *) pass "no step metadata leaked in" ;; esac
+case "$out" in *"8 segments"*) pass "8 segments by default" ;; *) fail "not 8 segments" ;; esac
 
-echo "exp status（不带参数，默认取第一行）"
+echo "exp status (no argument: defaults to the first row)"
 out="$(run status)"; code=$?
-[ $code -eq 0 ] && pass "退出码 0" || fail "退出码 $code"
+[ $code -eq 0 ] && pass "exit code 0" || fail "exit code $code"
 
 echo "exp config demo-sft"
 out="$(run config demo-sft)"; code=$?
-[ $code -eq 0 ] && pass "退出码 0" || fail "退出码 $code"
-case "$out" in *echo*) pass "打印出了 launch.sh" ;; *) fail "没打印 launch.sh" ;; esac
+[ $code -eq 0 ] && pass "exit code 0" || fail "exit code $code"
+case "$out" in *echo*) pass "printed launch.sh" ;; *) fail "did not print launch.sh" ;; esac
 
 echo "exp errors demo-sft"
 out="$(run errors demo-sft)"; code=$?
-[ $code -eq 0 ] && pass "退出码 0" || fail "退出码 $code"
+[ $code -eq 0 ] && pass "exit code 0" || fail "exit code $code"
 
-echo "事前记录（exp plan / status）"
+echo "pre-registration (exp plan / status)"
 out="$(run status demo-sft)"
-case "$out" in *"判据: 用固定 dev 集"*) pass "status 把判据印在指标旁" ;; *) fail "status 没带出判据" ;; esac
+case "$out" in *"criterion: judge by eval loss"*) pass "status prints the criterion next to the metrics" ;; *) fail "status did not carry the criterion" ;; esac
 
 out="$(run plan demo-sft)"; code=$?
-[ $code -eq 0 ] && pass "exp plan 退出码 0" || fail "exp plan 退出码 $code"
-case "$out" in *"预算与止损"*) pass "打印了 PLAN.md 全文" ;; *) fail "没打印全文" ;; esac
+[ $code -eq 0 ] && pass "exp plan exit code 0" || fail "exp plan exit code $code"
+case "$out" in *"Budget and stop-loss"*) pass "printed the full PLAN.md" ;; *) fail "did not print the full text" ;; esac
 
-# 没写 / 半角冒号 两种实验，共用一份临时登记表
+# Two runs sharing one temporary registry: no PLAN written, and an ASCII colon
 mkdir -p "$TMP/noplan" "$TMP/halfwidth"
-printf '判据: 半角冒号也得能读出来\n' > "$TMP/halfwidth/PLAN.md"
+printf 'Criterion: an ASCII colon has to parse too\n' > "$TMP/halfwidth/PLAN.md"
 cat > "$TMP/plan-runs.conf" <<EOF
-名字   机器   目录             方法  tmux  说明
-fresh  local  $TMP/noplan      sft   -     没写事前记录
-half   local  $TMP/halfwidth   sft   -     半角冒号
+# name   machine  dir                 method  tmux  note
+fresh    local    $TMP/noplan         sft     -     no pre-registration written
+half     local    $TMP/halfwidth      sft     -     ASCII colon
 EOF
 cat > "$TMP/plan.conf" <<EOF
 RUNS_CONF="$TMP/plan-runs.conf"
@@ -106,55 +108,55 @@ EOF
 planrun() { EXPT_CONF="$TMP/plan.conf" bash "$TOOL/exp" "$@" 2>&1; }
 
 out="$(planrun status fresh)"
-case "$out" in *"没有 PLAN.md"*) pass "没写时 status 会提醒" ;; *) fail "没写时 status 没提醒" ;; esac
+case "$out" in *"no PLAN.md"*) pass "status warns when it is missing" ;; *) fail "status did not warn when it is missing" ;; esac
 
 out="$(planrun plan fresh)"; code=$?
-[ $code -eq 0 ] && pass "exp plan 生成模板" || fail "生成模板失败（退出码 $code）"
-[ -f "$TMP/noplan/PLAN.md" ] && pass "PLAN.md 真的落盘了" || fail "PLAN.md 没落盘"
-case "$(cat "$TMP/noplan/PLAN.md" 2>/dev/null)" in *"判据："*) pass "模板里有判据一项" ;; *) fail "模板缺判据" ;; esac
+[ $code -eq 0 ] && pass "exp plan generates the template" || fail "template generation failed (exit code $code)"
+[ -f "$TMP/noplan/PLAN.md" ] && pass "PLAN.md actually landed on disk" || fail "PLAN.md did not land on disk"
+case "$(cat "$TMP/noplan/PLAN.md" 2>/dev/null)" in *"Criterion:"*) pass "the template has a Criterion item" ;; *) fail "the template is missing Criterion" ;; esac
 
 out="$(planrun status half)"
-case "$out" in *"判据: 半角冒号也得能读出来"*) pass "半角冒号也能读出来" ;; *) fail "半角冒号没读出来" ;; esac
+case "$out" in *"criterion: an ASCII colon has to parse too"*) pass "an ASCII colon parses too" ;; *) fail "an ASCII colon did not parse" ;; esac
 
 echo "exp report demo-sft"
 RPT="$TMP/report.html"
 out="$(run report demo-sft --out "$RPT")"; code=$?
-[ $code -eq 0 ] && pass "退出码 0" || fail "退出码 $code"
-[ -f "$RPT" ] && pass "报告文件生成了" || fail "报告文件没生成"
+[ $code -eq 0 ] && pass "exit code 0" || fail "exit code $code"
+[ -f "$RPT" ] && pass "report file was written" || fail "report file was not written"
 body="$(cat "$RPT" 2>/dev/null)"
-case "$body" in *"<!doctype html>"*) pass "是 HTML（有 doctype）" ;; *) fail "不是 HTML" ;; esac
-case "$body" in *"<svg"*) pass "含内联 SVG 曲线" ;; *) fail "没有内联 SVG" ;; esac
-case "$body" in *"loss"*) pass "含指标 loss" ;; *) fail "缺 loss" ;; esac
-case "$body" in *"grad_norm"*) pass "含指标 grad_norm" ;; *) fail "缺 grad_norm" ;; esac
-case "$body" in *"rewards/accuracies"*) pass "含指标 rewards/accuracies" ;; *) fail "缺 rewards/accuracies" ;; esac
-case "$body" in *"用固定 dev 集上的 eval loss"*) pass "含 PLAN.md 里的判据文字" ;; *) fail "缺判据文字" ;; esac
-case "$body" in *"判据 ≤"*) pass "判据画成了参考线" ;; *) fail "判据没画成参考线" ;; esac
-case "$body" in *"健康检查"*) pass "含健康检查" ;; *) fail "缺健康检查" ;; esac
-if printf '%s' "$body" | grep -qE 'https?://'; then fail "报告里有外部 URL"; else pass "没有任何外部 URL"; fi
-if printf '%s' "$body" | grep -qE '<link|src=|@import'; then fail "报告里有外部资源引用"; else pass "没有外部资源引用"; fi
+case "$body" in *"<!doctype html>"*) pass "is HTML (has a doctype)" ;; *) fail "is not HTML" ;; esac
+case "$body" in *"<svg"*) pass "contains inline SVG charts" ;; *) fail "no inline SVG" ;; esac
+case "$body" in *"loss"*) pass "contains the loss metric" ;; *) fail "missing loss" ;; esac
+case "$body" in *"grad_norm"*) pass "contains the grad_norm metric" ;; *) fail "missing grad_norm" ;; esac
+case "$body" in *"rewards/accuracies"*) pass "contains the rewards/accuracies metric" ;; *) fail "missing rewards/accuracies" ;; esac
+case "$body" in *"judge by eval loss on the fixed dev set"*) pass "contains the criterion text from PLAN.md" ;; *) fail "missing the criterion text" ;; esac
+case "$body" in *"criterion ≤"*) pass "the criterion was drawn as a reference line" ;; *) fail "the criterion was not drawn as a reference line" ;; esac
+case "$body" in *"Health checks"*) pass "contains the health checks" ;; *) fail "missing the health checks" ;; esac
+if printf '%s' "$body" | grep -qE 'https?://'; then fail "the report has an external URL"; else pass "no external URL anywhere"; fi
+if printf '%s' "$body" | grep -qE '<link|src=|@import'; then fail "the report references an external resource"; else pass "no external resource references"; fi
 
-# 默认写到当前目录，不写进运行目录
+# Defaults to the current directory, not the run directory
 ( cd "$TMP" && run report demo-sft >/dev/null 2>&1 )
-[ -f "$TMP/exp-report-demo-sft.html" ] && pass "默认写到 ./exp-report-<名字>.html" || fail "默认输出路径不对"
+[ -f "$TMP/exp-report-demo-sft.html" ] && pass "defaults to ./exp-report-<name>.html" || fail "wrong default output path"
 
-echo "exp report 的错误路径"
+echo "exp report error paths"
 out="$(run report no-such-run)"; code=$?
-[ $code -ne 0 ] && pass "不认识的实验会报错" || fail "不认识的实验居然成功了"
+[ $code -ne 0 ] && pass "an unknown run errors out" || fail "an unknown run succeeded"
 
-echo "错误路径"
+echo "error paths"
 out="$(run nonsense)"; code=$?
-[ $code -ne 0 ] && pass "不认识的命令会报错" || fail "不认识的命令居然成功了"
+[ $code -ne 0 ] && pass "an unknown command errors out" || fail "an unknown command succeeded"
 
 out="$(run status no-such-run)"; code=$?
-[ $code -ne 0 ] && pass "不认识的实验会报错" || fail "不认识的实验居然成功了"
+[ $code -ne 0 ] && pass "an unknown run errors out" || fail "an unknown run succeeded"
 
 out="$(EXPT_CONF="$TMP/bad.conf" bash "$TOOL/exp" list 2>&1)"; code=$?
-[ $code -ne 0 ] && pass "登记表不存在时报错" || fail "登记表不存在时居然成功了"
-case "$out" in *runs.conf*) pass "报错里指明了 runs.conf" ;; *) fail "报错没提 runs.conf" ;; esac
+[ $code -ne 0 ] && pass "errors out when the registry is missing" || fail "succeeded with a missing registry"
+case "$out" in *runs.conf*) pass "the error names runs.conf" ;; *) fail "the error does not mention runs.conf" ;; esac
 
 echo
 if [ "$FAILED" -gt 0 ]; then
-  echo "$FAILED 项没过。"
+  echo "$FAILED checks failed."
   exit 1
 fi
-echo "全部通过。"
+echo "all passed."

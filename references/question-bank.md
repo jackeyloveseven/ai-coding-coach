@@ -1,121 +1,121 @@
-# 题库与出题原则
+# Question bank and how to write questions
 
-用于黄档的「自测」、「考我」模式、到期复习。好题能暴露理解的缺口，差题只考记忆。
+Used for yellow-tier self-checks, quiz-me mode, and due reviews. A good question exposes a gap in understanding; a bad one tests memory.
 
-目录：1 出题原则 · 2 题型 · 3 按等级选题 · 4 点评方法 · 5 种子题 · 6 出题的构造规矩 · 7 检索练习优先于重读
+Contents: 1 How to write questions · 2 Question types · 3 Choosing by level · 4 Responding to an answer · 5 Seed questions · 6 Fair construction for multiple choice · 7 Retrieval beats re-reading
 
-## 1 出题原则
+## 1 How to write questions
 
-- **带情境，不问定义。** 「什么是 mask」是差题；「这里 batch 里有长短不一的序列，padding 位置的 loss 该怎么处理」是好题。
-- **一次一题**，等他答完再出下一题。
-- **不附答案。** 答案在他答完之后再讲。
-- **优先取材于他刚做过的代码或刚看过的日志**，比通用题更有黏性。
-- **不考背诵。** 具体的默认参数、函数名之类，查一下就有，不值得考。
-- 技术论断要准。拿不准的题不要出，宁可少出。
+- **Situational, never definitional.** "What is a mask" is a bad question. "This batch has sequences of different lengths — what should happen to the loss at the padding positions?" is a good one.
+- **One question at a time.** Wait for the answer before the next.
+- **No answer attached.** The answer comes after they've answered.
+- **Draw on code they just worked on or a log they just read.** It sticks far better than a generic question.
+- **Never test recall.** Specific default values and function names are one lookup away; they aren't worth examining.
+- Technical claims must be accurate. If you're not sure of the answer, don't ask the question. Better to ask fewer.
 
-## 2 题型
+## 2 Question types
 
-| 题型 | 形式 | 考察什么 |
+| Type | Form | What it tests |
 |---|---|---|
-| 复述 | 用自己的话讲这段代码在做什么、为什么 | 是否真读懂 |
-| 预测 | 这段代码跑起来，shape、loss、输出会是什么 | 心智模型是否准确 |
-| 反事实 | 如果把 X 改成 Y，会发生什么 | 是否理解因果 |
-| 诊断 | 给一个症状，找可能的原因 | 排查思路 |
-| 权衡 | 两个指标一涨一跌，怎么取舍 | 判断力 |
-| Bug hunt | 一段能跑但有静默错误的代码，找出来 | 审查能力 |
+| Restate | Explain in your own words what this code does and why | Whether they actually read it |
+| Predict | Run this — what shape, loss, output? | Whether the mental model is accurate |
+| Counterfactual | If X became Y, what happens? | Whether they understand causation |
+| Diagnose | Given a symptom, find the possible causes | Debugging instinct |
+| Trade-off | Two metrics move in opposite directions — how do you choose? | Judgment |
+| Bug hunt | Code that runs but is silently wrong — find it | Reviewing ability |
 
-## 3 按等级选题
+## 3 Choosing by level
 
-掌握等级的定义见 `mastery-ledger.md`。没有台账时，凭会话中的表现判断。
+Level definitions are in `mastery-ledger.md`. Without a ledger, judge from the session.
 
-- 等级 0–1：复述、预测。先确认读懂。
-- 等级 2：反事实、诊断。
-- 等级 3 以上：权衡、bug hunt。
+- Level 0–1: restate, predict. Confirm comprehension first.
+- Level 2: counterfactual, diagnose.
+- Level 3 and up: trade-off, bug hunt.
 
-## 4 点评方法
+## 4 Responding to an answer
 
-1. 先具体肯定他答对的部分。
-2. 指出最关键的一个缺口，不要列一堆。
-3. 讲清楚缺口背后的原因，别只给正确答案。
-4. 结果分三类，有台账时记录：`pass`（独立答对）、`partial`（对了一部分）、`fail`（关键概念错了）。以他「做出来」为准，不看他的自我评价。
+1. Name specifically what they got right.
+2. Point at the single most important gap — not a list.
+3. Explain the reason behind the gap. Don't just hand over the correct answer.
+4. Sort the outcome into `pass` (correct unaided), `partial` (partly), `fail` (a key concept was wrong), and record it when a ledger exists. Judge by what they **produced**, not by their self-assessment.
 
-## 5 种子题
+## 5 Seed questions
 
-「考察点」是好答案应包含的要点，供你点评时对照，不要直接念给他。标了「经验」的是常见情况，不是绝对。
+"Key points" is what a good answer should contain — use it to check their answer, don't read it out to them. Items marked *(rule of thumb)* are common tendencies, not absolutes.
 
-**PyTorch 与训练循环**
+**PyTorch and the training loop**
 
-| 题干 | 考察点 |
+| Question | Key points |
 |---|---|
-| 忘了在每步 `backward()` 之前清梯度，会发生什么？ | PyTorch 默认累加梯度，相当于隐式增大 batch 但并非本意；梯度累积是有意为之的同一机制 |
-| `model.eval()` 和 `torch.no_grad()` 分别管什么？只用其中一个会怎样？ | 前者改变 dropout、BN 等层的行为，后者关闭梯度记录以省显存；两者互相独立，各管各的 |
-| 一个 `(B, T)` 的逐 token loss 乘上 `(B,)` 的样本权重，会发生什么？ | 广播对齐的是末尾维度；`B != T` 会报错，但 `B == T` 时会静默地沿错误的轴相乘。应该显式 `unsqueeze(-1)` |
-| 训练时一切正常，评估时指标却异常差，你先查什么？ | train/eval 模式、预处理是否一致、评测数据是否读对、是否有数据泄露的反向情形 |
+| What happens if you forget to zero the gradients before each `backward()`? | PyTorch accumulates gradients by default, which implicitly enlarges the batch — usually not what you meant. Gradient accumulation is the same mechanism, used deliberately |
+| What do `model.eval()` and `torch.no_grad()` each control? What breaks if you only use one? | The first changes the behavior of dropout, BatchNorm and similar layers; the second turns off gradient recording to save memory. They're independent and do different jobs |
+| You multiply a per-token loss of shape `(B, T)` by per-sample weights of shape `(B,)`. What happens? | Broadcasting aligns trailing dimensions; `B != T` errors, but when `B == T` it silently multiplies along the wrong axis. Use an explicit `unsqueeze(-1)` |
+| Training looks fine but eval metrics are terrible. What do you check first? | Train/eval mode, whether preprocessing matches, whether the eval data is being read correctly, and the mirror image of data leakage |
 
 **SFT**
 
-| 题干 | 考察点 |
+| Question | Key points |
 |---|---|
-| SFT 时为什么通常要把 prompt 部分的 loss mask 掉？ | 目标是学会生成回答，而不是复述提示；不 mask 会把容量花在预测 prompt 上。有些场景会保留，取决于任务（经验） |
-| padding 位置在 loss 里怎么处理？漏了会怎样？ | 用 ignore index 或 mask 排除；漏了会让 loss 被 padding 拉偏，且和序列长度相关 |
-| 训练 loss 一路降，验证 loss 从某处开始回升，说明什么？ | 过拟合的典型信号；可能是数据量小、训练轮数多、学习率偏大；对策要按原因来 |
+| Why do you usually mask the prompt out of the loss during SFT? | The goal is to learn to generate the response, not to recite the prompt; leaving it in spends capacity on predicting the prompt. Some setups keep it, depending on the task *(rule of thumb)* |
+| How should padding positions be handled in the loss, and what happens if you miss them? | Exclude them with an ignore index or a mask; otherwise the loss is dragged around by padding, and correlated with sequence length |
+| Training loss keeps falling while validation loss turns upward partway through. What does that mean? | The classic overfitting signal. Could be too little data, too many epochs, or too large a learning rate; the fix follows the cause |
 
 **DPO**
 
-| 题干 | 考察点 |
+| Question | Key points |
 |---|---|
-| β 调大，模型会更靠近还是更远离参考模型？为什么？ | 更靠近。β 越大，隐式的偏离惩罚越强 |
-| DPO 为什么需要参考模型？ | 目标函数比较的是策略相对参考模型的偏好差，参考模型给出基准，也起到约束偏离的作用 |
-| 训练中 margin 在变大，但 chosen 的对数概率也在下降，是 bug 吗？ | 不一定。DPO 优化的是相对差，绝对概率下降是被讨论过的现象（经验），要靠生成样本和评测确认有没有退化 |
-| `rewards/accuracies` 很快到 1，是好事吗？ | 可能任务偏容易或学过头，要看生成效果，不能只看这个数 |
+| If you raise β, does the model move closer to or further from the reference? Why? | Closer. A larger β strengthens the implicit penalty on deviation |
+| Why does DPO need a reference model? | The objective compares the policy's preference *relative to the reference*; the reference supplies the baseline and constrains how far the policy can drift |
+| Mid-training the margin is growing but the chosen log-probability is also falling. Is that a bug? | Not necessarily. DPO optimizes a relative difference, and falling absolute probabilities are a known phenomenon *(rule of thumb)*. Confirm with generated samples and evaluation that quality hasn't degraded |
+| `rewards/accuracies` reaches 1 quickly. Is that good? | It may mean the task is easy or the model has overlearned. Look at generation quality, not just this number |
 
-**RL 后训练（通用）**
+**RL post-training (general)**
 
-| 题干 | 考察点 |
+| Question | Key points |
 |---|---|
-| 训练奖励一路涨，为什么不能直接当作模型变好的证据？ | 每步 prompt 不同、分布在漂移、可能是 reward hacking；要用固定评测集，并看样本 |
-| 怎么发现 reward hacking？ | 固定 prompt 并排比较不同 checkpoint 的样本；用另一个独立指标交叉检验；人眼看 |
-| KL 约束系数太大或太小，各会怎样？ | 太小容易漂移或被利用奖励漏洞；太大学得很少，几乎不动（经验） |
+| Training reward climbs steadily. Why isn't that direct evidence the model improved? | The prompts differ each step, the distribution drifts, and reward hacking is possible. Use a fixed eval set, and look at samples |
+| How do you detect reward hacking? | Compare samples from different checkpoints side by side on fixed prompts; cross-check with an independent metric; look at it with your own eyes |
+| What happens if the KL penalty coefficient is too large, or too small? | Too small and the policy drifts or exploits reward loopholes; too large and it barely learns *(rule of thumb)* |
 
-**扩散与 flow**
+**Diffusion and flow**
 
-| 题干 | 考察点 |
+| Question | Key points |
 |---|---|
-| 给定 x0，训练时如何构造带噪样本？预测噪声、预测 x0、预测 v 有何区别？ | 前向过程有闭式，可以直接从 x0 一步采样到任意时间步；三者是同一个目标的不同参数化，数值尺度和训练稳定性不同 |
-| classifier-free guidance 的强度调大，通常会怎样？ | 提示遵循度上升、多样性下降，过大易出现过饱和或伪影（经验） |
-| 采样步数减半，质量和速度怎么变？ | 速度近似线性提升，质量取决于 sampler 和模型；需要实测，不同 sampler 差异大 |
+| Given x0, how do you construct a noisy sample for training? What's the difference between predicting noise, x0, and v? | The forward process has a closed form, so you can sample directly from x0 to any timestep in one step. The three are different parameterizations of the same objective, differing in numerical scale and training stability |
+| What usually happens when you turn up the classifier-free guidance strength? | Prompt adherence rises and diversity falls; too high and you get oversaturation or artifacts *(rule of thumb)* |
+| You halve the number of sampling steps. What happens to quality and speed? | Speed improves roughly linearly; quality depends on the sampler and the model, and has to be measured — samplers differ a lot |
 
-**评估与数据**
+**Evaluation and data**
 
-| 题干 | 考察点 |
+| Question | Key points |
 |---|---|
-| 数据泄露常见有哪几种来源？ | 训练集与评测集重叠；预处理（归一化、分词、筛选）用了全量数据的统计；近似重复样本；用评测集选超参或选 checkpoint |
-| 指标 A 涨了，指标 B 跌了，你怎么判断？ | 各自衡量什么；哪个更接近真实目标；波动有多大；看样本；不要只盯单个数 |
-| 你怎么知道这个评测集够大、够稳？ | 同配置不同种子的波动；评测样本量；置信区间的直觉 |
+| What are the common sources of data leakage? | Train/eval overlap; preprocessing (normalization, tokenization, filtering) computing statistics over the full dataset; near-duplicate examples; selecting hyperparameters or checkpoints on the eval set |
+| Metric A went up and metric B went down. How do you decide? | What each one measures; which is closer to the real goal; how large the noise is; look at samples. Don't stare at a single number |
+| How do you know your eval set is large enough and stable enough? | The spread across seeds at the same configuration; the number of eval examples; an intuition for the confidence interval |
 
-**实验决策**
+**Experiment decisions**
 
-| 题干 | 考察点 |
+| Question | Key points |
 |---|---|
-| 新方法没有提升，你先怀疑 bug 还是怀疑想法？怎么区分？ | 先排除 bug：小样本过拟合、检查梯度是否流到新模块、配置是否生效；确认无 bug 才谈想法无效 |
-| 你打算继续、停，还是换参数？依据是什么？ | 有没有事前判据；曲线趋势；预算；决定权在他，你只补漏 |
+| A new method shows no improvement. Do you suspect a bug or the idea first, and how do you tell them apart? | Rule out the bug first: overfit a tiny sample, check that gradients reach the new module, check the config took effect. Only then discuss whether the idea is inert |
+| Do you plan to continue, stop, or change a parameter — and on what basis? | Whether there was a pre-registered criterion; the shape of the curve; the budget. The decision is theirs; you only fill gaps |
 
-## 6 出题的构造规矩
+## 6 Fair construction for multiple choice
 
-这一节只讲「怎么把一道题造得公平」。题本身不公平，答对也说明不了什么。
+This section is only about making a question *fair*. An unfair question tells you nothing even when it's answered correctly.
 
-- **选项等长。** 所有选项的字数尽量一致（能一致到字符数最好）。正确项一旦更长、更具体，就成了唯一的「详细选项」，他不用想就能挑出来。这条借自 `mattpocock/skills` 的 `teach` skill（MIT）。
-- **正确项位置打乱。** 不要总放第一个或最后一个。位置固定，他就学会按位置猜，而不是按内容判断。
-- **不靠排版、顺序、语气泄题。** 加粗、语序、措辞的确定程度都不能暗示答案。正确项写「通常」「往往」，干扰项写「一定」「绝不」，等于把答案写在脸上。
+- **Equal-length options.** Keep all options about the same length — ideally the same character count. The moment the correct option is longer and more specific, it becomes the only "detailed option" and can be picked without thinking. This one is borrowed from the `teach` skill in `mattpocock/skills` (MIT).
+- **Shuffle the position of the correct answer.** Don't always put it first or last. A fixed position teaches them to guess by position rather than judge by content.
+- **Don't leak the answer through formatting, ordering, or tone.** Bolding, word order, and how certain the phrasing sounds must not hint at the answer. If the correct option says "usually" and the distractors say "always" or "never", the answer is written on its face.
 
-出完选择题，自己先扫一遍：只看选项的形态（长短、位置、语气），能不能猜对？能，就重造。
+After writing a multiple-choice question, scan it once yourself: from the shape of the options alone — length, position, tone — can you guess the answer? If you can, rewrite it.
 
-## 7 检索练习优先于重读
+## 7 Retrieval beats re-reading
 
-让他从记忆里回想（retrieval practice），比让他重读一遍材料有用得多。
+Having them recall from memory (retrieval practice) is far more useful than having them re-read the material.
 
-- 重读会产生「我懂了」的错觉：读着顺，就以为记住了，其实只是熟悉。
-- 回想时答不出来，才是真实的缺口，也是最有价值的信号。
-- 所以「考我」不是走过场，它是主要的练习形式；重读、看讲义只是它的补充。
+- Re-reading produces an illusion of understanding: it reads smoothly, so it feels remembered. What it actually produces is familiarity.
+- Failing to recall is the real gap, and the most valuable signal you can get.
+- So "quiz me" is not a formality. It is the primary form of practice; re-reading and reviewing notes are its supplement.
 
-他说「先让我看一遍再答」可以，但看完要合上再答，别对着材料抄。
+"Let me read it once before answering" is fine — but then they close the material and answer from memory. Don't let them copy from the page.

@@ -1,8 +1,8 @@
-# 事前记录 —— 跑之前写完，跑完对照
+# Pre-registration - write it before the run, check against it after
 
-假设：把学习率从 2e-5 降到 1e-5，会让 SFT 的验证 loss 更稳，因为现在后段抖动偏大
-对照：baseline 是 lr=2e-5 的那次，同数据、同步数、同评测，只有学习率不同
-变量：这次只改学习率
-判据：用固定 dev 集上的 eval loss 判断，比 baseline 低 0.02 以上才算有效
-预算与止损：最多跑 8 小时；如果前 200 步 loss 不降反升就提前停
-预测：我觉得 eval loss 会低 0.01~0.03，把握中
+Hypothesis: dropping the learning rate from 2e-5 to 1e-5 will make the SFT validation loss steadier, because the tail is noisy right now
+Control: the baseline is the lr=2e-5 run, same data, same step count, same evaluation - only the learning rate differs
+Variable: only the learning rate changes in this run
+Criterion: judge by eval loss on the fixed dev set; it must come in at least 0.02 lower than the baseline
+Budget and stop-loss: run for at most 8 hours; stop early if the loss rises instead of falling over the first 200 steps
+Prediction: I expect eval loss 0.01-0.03 lower, confidence medium

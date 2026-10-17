@@ -1,110 +1,110 @@
-# 掌握度台账
+# The mastery ledger
 
-让分档随用户成长自适应，让复习有依据。没有它，红档永远是红档，用户学会了也不知道，学过的东西也不会复习。
+This is what lets tiering adapt as the user grows, and what gives review a basis. Without it, red-tier stays red-tier forever, the user never finds out they've learned something, and nothing they learned gets revisited.
 
-目录：1 两种存储方式 · 2 开启与隐私 · 3 等级与证据 · 4 与分档联动 · 5 间隔复习 · 6 摸底 · 7 学习卡格式 · 8 脚本用法 · 9 取代
+Contents: 1 Two ways to store it · 2 Consent and privacy · 3 Levels and evidence · 4 How it moves the tier · 5 Spaced review · 6 The assessment · 7 Study-card format · 8 Script usage · 9 Superseding old understanding
 
-## 1 两种存储方式
+## 1 Two ways to store it
 
-**A. 有本地文件系统**（比如 Claude Code、Cowork）且用户同意：用 `scripts/ledger.py`，台账存在本地，跨会话保留。
+**A. There is a persistent local filesystem** (Claude Code, a local workspace) and the user agrees: use `scripts/ledger.py`. The ledger lives locally and survives across sessions.
 
-**B. 没有持久存储**（比如网页版对话，容器会重置，skill 目录只读）：不要假装能记住。在收尾复盘时输出「学习卡」（格式见第 7 节），请用户存进自己的笔记，下次对话开头贴回来，你读取后按台账执行。
+**B. There is no persistent storage** (a web chat where the container resets and the skill directory is read-only): do not pretend to remember. Print a **study card** at wrap-up (format in §7), ask the user to save it in their own notes, and have them paste it back at the start of the next conversation. You read it and behave as the ledger.
 
-**怎么判断属于哪种**：看你在哪里运行。在用户自己的机器上（Claude Code、本地工作区）走 A。在会重置的沙盒容器里（网页版对话，文件靠 present_files 交付，skill 目录只读）走 B。不要用「能不能写文件」来判断，沙盒里写文件也会成功，但会话一结束就没了。拿不准就走 B，因为 B 不会写任何文件。
+**Which one you're in** depends on where you're running. On the user's own machine (Claude Code, a local workspace) it's A. In a sandbox that resets (web chat, files delivered through an upload step, read-only skill directory) it's B. Don't decide by "can I write a file" — writing succeeds in a sandbox too, and then the session ends and it's gone. If you're unsure, use B, because B never writes anything.
 
-## 2 开启与隐私
+## 2 Consent and privacy
 
-- **只在用户明确同意后才创建或写入台账。** 在首次实质性会话结束时，只问一次（把摸底一起问了，见第 6 节）：「要不要开启学习记录？之后我能按你的掌握情况调整教多少，也能安排复习。也可以顺便做个 10 分钟的摸底。」他拒绝，就不再提，也不写任何文件。
-- 用户说「开启学习记录」「记一下」，就开始；说「关掉」「别记了」，就停。
-- 只记**主题标签、结果、不超过一句的备注**。不记代码、主机名、内网地址、密钥、同事姓名，也不记与学习无关的项目细节。
-- 主题标签用小写连字符，粒度适中，例如 `dpo-loss`、`attention-mask`、`data-leakage`、`grad-norm-reading`、`experiment-baseline`。太粗（`pytorch`）没法针对性复习，太细（`line-42-bug`）没有复用价值。
+- **Create or write the ledger only after the user explicitly agrees.** At the end of the first substantial session, ask once — folding the assessment into the same question (§6): "Want to turn on a learning record? Then I can adjust how much I teach based on what you already have, and schedule reviews. We could also do a 10-minute assessment while we're at it." If they decline, drop it and never write a file.
+- If they say "turn on the learning record" or "note that down", start. If they say "turn it off" or "stop recording", stop.
+- Record **topic tags, outcomes, and a note of at most one sentence.** No code, no hostnames, no internal addresses, no keys, no colleague names, and nothing about the project that isn't about the learning.
+- Topic tags are lowercase-hyphenated and mid-grained: `dpo-loss`, `attention-mask`, `data-leakage`, `grad-norm-reading`, `experiment-baseline`. Too coarse (`pytorch`) can't drive a targeted review; too fine (`line-42-bug`) has no reuse value.
 
-## 3 等级与证据
+## 3 Levels and evidence
 
-| 等级 | 含义 | 典型证据 |
+| Level | Meaning | Typical evidence |
 |---|---|---|
-| 0 | 还没掌握 | 答错关键概念，或者完全没接触 |
-| 1 | 能读懂 | 能复述这段代码在做什么 |
-| 2 | 能预测 | 跑之前能说对 shape、loss 量级、输出形态 |
-| 3 | 能独立写 | 先写后审时，差异很少且都是次要的 |
-| 4 | 能找 bug、能教别人 | bug hunt 里找到了静默错误；能向别人讲清楚 |
+| 0 | Not yet | Wrong on a key concept, or no exposure at all |
+| 1 | Can read | Can restate what this code does |
+| 2 | Can predict | Gets shape, loss magnitude and output form right before running |
+| 3 | Can write unaided | In write-first-then-review, differences are few and minor |
+| 4 | Can find bugs, can teach | Found the silent bug in a bug hunt; can explain it clearly to someone else |
 
-**证据必须是他做出来的**：答对自测、预测准、先写后审差异小、bug hunt 找到。他自己说「我懂了」不算，**「你讲过了」更不算**。听过、看过、点头，都只是覆盖（coverage），覆盖不是学习。讲完不等于学会：只有他独立做出来，才够格上调等级；没做出来之前，这条就停在原来的等级上，不因为「讲过了」而动。
+**Evidence has to be something they did**: answered a self-check correctly, predicted accurately, differed only trivially from the reference, found the bug. Their own "I get it" does not count, and **"you explained it" counts even less**. Hearing it, reading it, nodding along — that is coverage, and coverage is not learning. Explaining is not learning either: only producing it unaided raises the level. Until they produce it, the topic stays where it is, unmoved by having been explained.
 
-结果判定：`pass` 是独立做对；`partial` 是对了一部分；`fail` 是关键概念错了。证据很强时，可以用 `--level` 直接指定等级（比如他独立写对了完整实现，直接记 3）。
+Outcomes: `pass` means they got it right unaided; `partial` means partly; `fail` means a key concept was wrong. When the evidence is strong you can set the level directly with `--level` — for instance, they wrote a complete correct implementation unaided, so record 3.
 
-## 4 与分档联动
+## 4 How it moves the tier
 
-台账给出的是调档**建议**，用户自己定的分工始终优先，红档里他手册里明确写的「自己做」项不受影响。
+The ledger produces a **suggestion**. The user's own division of labor always outranks it, and anything they explicitly reserved for themselves is unaffected.
 
-| 该主题的等级 | 调档 |
+| Level on that topic | Tier shift |
 |---|---|
-| 0–1 | 按默认档；他反复出错的主题，可以上调一档（黄升红邀请，仍遵守每次会话的红档预算） |
-| 2 | 按默认档 |
-| 3–4 | 下调一档：红降黄，黄降绿。**但保留一句静默风险提示**，因为那关乎正确性，不因熟练而消失 |
+| 0–1 | Default tier; for a topic they keep fumbling, invite one tier higher (yellow rises to a red invitation, still within the per-session red budget) |
+| 2 | Default tier |
+| 3–4 | Drop one tier: red becomes yellow, yellow becomes green. **But keep the one-line silent-risk note** — that's about correctness, and it doesn't disappear with familiarity |
 
-## 5 间隔复习
+## 5 Spaced review
 
-- 等级越高，复习间隔越长：1 / 3 / 7 / 16 / 35 天。答得不完整时间隔缩短，答错则第二天再来。
-- **复习要顺势而为，不要打断。** 只在当前任务与到期主题相关时才问，比如他正在写 DPO 代码，`dpo-loss` 刚好到期，就顺便问一题。无关的任务不要硬插复习。
-- 每次会话最多问 1–2 道复习题。
-- 会话开头如果有台账，可以运行 `due` 看一眼有哪些到期，记在心里，找合适的时机再用，不要一上来就考。
+- The higher the level, the longer the interval: 1 / 3 / 7 / 16 / 35 days. An incomplete answer shortens the interval; a wrong answer brings it back tomorrow.
+- **Review goes with the flow; it never interrupts.** Ask only when the current task touches a due topic — they're writing DPO code and `dpo-loss` happens to be due, so slip one question in. Don't force review into an unrelated task.
+- At most one or two review questions per session.
+- If a ledger exists, running `due` at the start of a session to see what's waiting is fine. Keep it in mind and use it at the right moment — don't open with a quiz.
 
-## 6 摸底
+## 6 The assessment
 
-一次性、用户自愿。目的是让你一开始就知道该从哪里教起。
+One-off, and voluntary. Its purpose is to tell you where to start teaching.
 
-**提出方式**：和第 2 节的学习记录邀请合并成一次询问，不要分两次问。他只想开启记录、不想摸底，也可以。摸底会问 6–8 个小问题，之后你就知道该在哪里多教、哪里少说。
+**How to offer it**: fold it into the same question as the learning-record invitation in §2 — don't ask twice. Wanting the record without the assessment is fine. The assessment is 6–8 short questions, after which you know where to teach more and where to say less.
 
-**内容**：每个领域 1–2 题，从 `question-bank.md` 选，覆盖：
+**Content**: one or two questions per area, drawn from `question-bank.md`, covering:
 
-1. PyTorch 与训练循环基础
-2. loss 与训练目标
-3. 数据与评估
-4. 他所在方向的方法原理（比如 SFT / DPO / RL / 扩散）
-5. 实验设计
-6. 排障与读数
+1. PyTorch and training-loop fundamentals
+2. Losses and training objectives
+3. Data and evaluation
+4. The methods in their own area (SFT / DPO / RL / diffusion)
+5. Experiment design
+6. Triage and reading a run
 
-**流程**：一次一题；不给答案，答完点评；每个领域记一个等级。
+**Flow**: one question at a time; no answers given, respond after each; record one level per area.
 
-**结束时**给出三行总结：强项、待补的领域、建议的第一个练习。语气务实，不要评判。
+**At the end**, three lines: strengths, areas to shore up, and a suggested first exercise. Matter-of-fact tone. No judgement.
 
-## 7 学习卡格式
+## 7 Study-card format
 
-没有持久存储时，在收尾复盘输出这张卡：
+With no persistent storage, print this at wrap-up:
 
 ```
-# 学习卡（<日期>）
-| 主题 | 等级 | 上次 | 下次复习 |
+# Study card (<date>)
+| Topic | Level | Last | Next review |
 |---|---|---|---|
-| dpo-loss | 2 能预测 | 2026-09-29 | 2026-10-06 |
-| attention-mask | 0 还没掌握 | 2026-09-29 | 2026-09-30 |
+| dpo-loss | 2 can predict | 2026-09-29 | 2026-10-06 |
+| attention-mask | 0 not yet | 2026-09-29 | 2026-09-30 |
 
-常犯错误：
-- attention-mask：把 mask 方向写反
+Recurring mistakes:
+- attention-mask: wrote the mask direction backwards
 ```
 
-用户下次贴回来时，读取它，并在本次会话结束时输出更新后的新卡。
+When they paste it back next time, read it, and print an updated card at the end of that session.
 
-## 8 脚本用法
+## 8 Script usage
 
 ```bash
-python3 scripts/ledger.py record dpo-loss pass --note "答对 beta 的作用"
-python3 scripts/ledger.py record attention-mask fail --note "mask 方向写反"
-python3 scripts/ledger.py record grad-norm-reading pass --level 3   # 证据很强时直接指定等级
-python3 scripts/ledger.py due --limit 3    # 到期的复习项
-python3 scripts/ledger.py show             # 全部主题与调档建议
-python3 scripts/ledger.py card             # 导出学习卡
+python3 scripts/ledger.py record dpo-loss pass --note "got beta's role right"
+python3 scripts/ledger.py record attention-mask fail --note "mask direction backwards"
+python3 scripts/ledger.py record grad-norm-reading pass --level 3   # set the level directly when evidence is strong
+python3 scripts/ledger.py due --limit 3    # what's due for review
+python3 scripts/ledger.py show             # every topic, with tier suggestions
+python3 scripts/ledger.py card             # export a study card
 ```
 
-台账默认在 `~/.ai-coding-coach/ledger.json`，可用环境变量 `COACH_LEDGER` 改位置。脚本读到损坏的文件时会报错并停止，不会覆盖它。
+The ledger defaults to `~/.ai-coding-coach/ledger.json`; set `COACH_LEDGER` to move it. If the script reads a corrupt file it errors out and stops rather than overwriting it.
 
-## 9 取代
+## 9 Superseding old understanding
 
-理解会被深化，也会被纠正。这时**把旧记录标记为「已被取代」，不要删掉**。
+Understanding deepens, and it also gets corrected. When that happens, **mark the old entry superseded — don't delete it.**
 
-- 「理解是怎么演变的」本身就是有用的信号：他从哪个错法走到对的，决定了他下次可能从哪摔。
-- 旧的理解往往不是孤立的，它常常预示相关主题还会再摔一次。删了，这条线索就没了。
-- 具体做法：保留旧条目（台账的历史里本来就会留最近若干条），在新备注里写清旧理解是什么、被什么取代了；学习卡里也可以保留一行划掉的旧结论。
+- "How the understanding changed" is itself a useful signal: which wrong path they came from tells you where they might trip next.
+- An old misunderstanding is rarely isolated. It often predicts a related topic that will trip them again. Delete it and that thread is gone.
+- Concretely: keep the old entry (the ledger history already retains the most recent few anyway), and write in the new note what the old understanding was and what replaced it. The study card can keep a struck-through line for the old conclusion.
 
-和「证据必须是他做出来的」配套：只有他做出新证据，取代才算成立。他说「我懂了，之前那个是错的」，仍然不算，见第 3 节。
+This pairs with "evidence has to be something they did": a supersede only takes effect once they produce new evidence. "I get it now, that earlier thing was wrong" still doesn't count — see §3.

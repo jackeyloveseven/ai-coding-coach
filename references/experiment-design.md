@@ -1,73 +1,73 @@
-# 实验设计与论文复现
+# Experiment design and paper reproduction
 
-实验设计是算法工程师最核心的价值，AI 替代不了，因为 AI 不知道用户的业务和数据。这份文件教他把「凭感觉试」变成「有假设、有判据的实验」。
+Experiment design is the most valuable thing an ML engineer does, and AI can't take it over, because AI doesn't know the user's business or their data. This file turns "let me try this and see" into "an experiment with a hypothesis and a criterion".
 
-目录：1 事前记录 · 2 常见的坑 · 3 消融怎么设计 · 4 跑完之后的决策 · 5 论文复现协议 · 6 教练话术
+Contents: 1 Pre-registration · 2 The usual traps · 3 Designing an ablation · 4 Deciding after the run · 5 The paper-reproduction protocol · 6 What to say
 
-本文里的判断多数是经验规则，不是定理。给用户讲时保持这个口径。
+Most of the judgments in here are rules of thumb, not theorems. Keep that framing when you teach them.
 
-## 1 事前记录
+## 1 Pre-registration
 
-跑实验之前，请他写下这六项。这是「预测再运行」在实验尺度上的版本，事后对照，预测错了就是学习点：
+Before the run, have them write these six items down. This is "predict before you run" at the scale of an experiment — compare afterwards, and a wrong prediction is a learning point:
 
 ```
-假设：我认为 <改动> 会让 <指标> 变好，因为 <理由>
-对照：baseline 是 <什么>，和实验组同预算、同数据、同评测
-变量：这次只改 <一件事>
-判据：用 <指标> 判断，涨过 <多少> 才算有效（事前定，别看完结果再定）
-预算与止损：最多跑 <多久>，出现 <什么现象> 就提前停
-预测：我觉得结果会是 <什么>，把握 <高/中/低>
+Hypothesis: I think <the change> will improve <the metric>, because <the reason>
+Control: the baseline is <what>, at the same budget, same data, same evaluation
+Variable: this run changes only <one thing>
+Criterion: judge by <metric>; it counts as an improvement only if it moves past <how much> (decide now, not after seeing the result)
+Budget and stop-loss: run for at most <how long>; stop early if <what happens>
+Prediction: I expect <what>, confidence <high/medium/low>
 ```
 
-「判据」是最容易被跳过的一项。结果出来之后再决定「涨多少算有效」，几乎总会得出「有效」的结论。
+The **criterion** is the item most often skipped. Deciding "how much counts as an improvement" after the results are in will almost always produce "it improved".
 
-用 `exptool` 的话，`exp plan <实验名>` 会按这六项生成模板，`exp status` 再把「判据」印在指标旁边——写完就不用记着回头对照了。
+If you're using a run-tracking tool that supports it, let the tool hold the criterion rather than their memory: the bundled `exptool` generates this template with `exp plan <run>` and prints the criterion directly above the metrics with `exp status`, so there's nothing to remember to check back against.
 
-## 2 常见的坑
+## 2 The usual traps
 
-- **一次改多个变量**：好了不知道是谁的功劳，坏了不知道该怪谁。
-- **baseline 没认真调**：拿调过参的新方法对比没调过的旧方法。
-- **只跑一个种子就下结论**：不知道随机波动有多大，差异可能只是噪声。至少要先量一次同配置不同种子的波动，才知道多大的差异值得信。
-- **在评测集上选超参或选 checkpoint**：结果会偏乐观。评测集应当只用来「最后看一次」。
-- **指标涨了，图（或样本）看着更差**：奖励类目标尤其要警惕 reward hacking。生成类任务必须让人眼看样本，指标只是辅助。
-- **没有 sanity check**：没验证过「小样本能过拟合」「随机基线是多少」「上限大概是多少」，就直接上大实验。
-- **只汇报好结果**：失败的实验同样有信息，值得记一行为什么失败。
+- **Changing several variables at once**: if it works you don't know what to thank, and if it breaks you don't know what to blame.
+- **An untuned baseline**: comparing a tuned new method against a stale old one.
+- **Concluding from a single seed**: you don't know how large the noise is, so the difference might be nothing. Measure the same-configuration spread across seeds once, and only then do you know what difference is worth believing.
+- **Selecting hyperparameters or checkpoints on the eval set**: the result comes out optimistic. The eval set is for looking at once, at the end.
+- **The metric improved but the samples got worse**: watch especially for reward hacking in reward-based objectives. Any generative task needs a human looking at samples; the metric is only a support.
+- **No sanity check**: going straight to a large run without having verified that a tiny sample can overfit, what the random baseline is, and roughly where the ceiling sits.
+- **Reporting only the wins**: a failed experiment carries information too. One line on why it failed is worth recording.
 
-## 3 消融怎么设计
+## 3 Designing an ablation
 
-- 每个消融对应一个假设：「如果我去掉 X，指标应该下降，因为 X 负责 Y」。
-- 一次只去掉或替换一个组件，其余保持一致。
-- 消融结果和预期不符时，别急着解释，先问是不是实现有 bug，或者这个组件在当前设置下本来就不起作用。
+- Each ablation corresponds to one hypothesis: "if I remove X, the metric should drop, because X is responsible for Y".
+- Remove or replace one component at a time; hold everything else fixed.
+- When the ablation contradicts the expectation, don't rush to explain it. First ask whether the implementation has a bug, or whether that component simply doesn't matter under this configuration.
 
-## 4 跑完之后的决策
+## 4 Deciding after the run
 
-下面是一个思考顺序，不是固定公式。教他自己走一遍，你只在他漏掉的地方补：
+What follows is an order of thinking, not a formula. Walk them through it themselves; you only fill the gaps they leave:
 
-1. **结果比预期好**：稳吗？换种子、换评测集还成立吗？看生成样本，有没有 reward hacking 的迹象？
-2. **结果没变化**：先排除 bug，再谈想法无效。用小样本过拟合、检查梯度是否真的流到了新加的模块、检查配置是否真的生效来区分。
-3. **结果变差**：看训练曲线和 `grad_norm` 有没有异常，看生成样本，找到变差的具体方式，再猜原因。
-4. 无论哪种结果，请他先说「我打算下一步做什么、为什么」，再听你的建议。决定权在他。
+1. **Better than expected**: is it stable? Does it hold across seeds and across eval sets? Look at the generated samples — any sign of reward hacking?
+2. **No change**: rule out a bug before concluding the idea is inert. Distinguish the two by overfitting a tiny sample, checking whether gradients actually reach the newly added module, and checking whether the config actually took effect.
+3. **Worse**: look at the training curve and `grad_norm` for anomalies, look at the samples, identify *how* it got worse, and only then guess why.
+4. Whichever it is, ask them first: "what do you plan to do next, and why?" Their call comes before your advice. The decision is theirs.
 
-## 5 论文复现协议
+## 5 The paper-reproduction protocol
 
-复现是理解密度最高的练习。你的角色是评审，不是代笔。
+Reproduction is the densest form of understanding there is. Your role is reviewer, not ghostwriter.
 
-1. **先通读，抓四样东西**：要解决的问题、方法的核心思想、实验设置、论文里的关键数字。
-2. **公式对照表**：请他列出每个关键公式的符号，对应到代码里的哪个变量或函数。对不上的地方，就是没读懂的地方。
-3. **先自己写，再对照官方实现**（如果有）。对照时，把每一处差异分成三类：bug、trick（论文没写但实现里有的技巧）、超参差异。搞清每一条差异为什么存在。
-4. **分级设目标**：先复现趋势（方向对、量级对），再追数字。数字对不上时，先查评测口径、数据处理和随机种子，再怀疑方法本身。
-5. **记录论文没写清的细节**：这些往往才是关键。
+1. **Read it through first and pull out four things**: the problem being solved, the core idea of the method, the experimental setup, and the key numbers in the paper.
+2. **A symbol table**: have them list every key formula's symbols and map each to a variable or function in the code. The ones that don't map are the ones they haven't understood.
+3. **Write it themselves first, then diff against the official implementation** if one exists. Sort every difference into three classes: bug, trick (something the implementation does that the paper doesn't mention), hyperparameter difference. Understand why each one exists.
+4. **Set tiered goals**: reproduce the trend first (right direction, right order of magnitude), then chase the numbers. When the numbers don't match, check the evaluation setup, the data processing and the seeds before suspecting the method itself.
+5. **Record the details the paper leaves out**. Those are often the ones that matter.
 
-## 6 教练话术
+## 6 What to say
 
-**用户说「我想试试 X」时**：
+**When they say "I want to try X"**:
 
-> 先把这六项写一下：假设、对照、变量、判据、预算与止损、预测。写完贴给我，我只挑最关键的两个漏洞。
+> Write down these six first: hypothesis, control, variable, criterion, budget and stop-loss, prediction. Paste it here and I'll pick out only the two most important holes.
 
-**他交了事前记录**：先肯定写得具体的部分，再挑最重要的一两个漏洞（最常见的是判据没有量化，或者对照不公平），不要逐项挑刺。
+**When they hand in a pre-registration**: name the specific parts that are well done first, then pick the one or two most important holes — the most common are a criterion that was never quantified, and a control that isn't fair. Don't nitpick every line.
 
-**他一次想改好几个东西**：
+**When they want to change several things at once**:
 
-> 这几个改动如果一起上，结果好了你不知道该谢谁。要不要先挑最想验证的那一个？
+> If these all go in together and it works, you won't know which one to thank. Want to pick the one you most want to verify first?
 
-**跑完之后**：请他先对照事前的预测，说说哪里符合、哪里不符，然后才轮到你分析。
+**After the run**: have them compare against their own prediction first — where it matched, where it didn't — and only then does your analysis come.

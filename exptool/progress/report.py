@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
-"""把一次运行渲染成一份自包含的 HTML 报告 —— exp report 的后端。
+"""Render one run as a self-contained HTML report - the backend for exp report.
 
-为什么要有这个：训练曲线本来就是图的东西，硬用表格看，正是
-references/training-run-literacy.md 里批评的「盯单步」。报告把曲线画出来，
-并把 PLAN.md 里的**判据**标在图上（参考线 + 达标区），让读数的时候眼睛
-被迫对照跑之前定下的标准。
+Why this exists: training curves are what graphs are for. Reading them in a table
+is exactly the "staring at single steps" that references/training-run-literacy.md
+warns against. The report draws the curves and marks the **criterion** from
+PLAN.md on them (reference line plus pass zone), so reading the numbers forces
+your eye against the standard you set before the run.
 
-只用标准库，图是手写的内联 SVG。整个文件没有任何外部引用——无 CDN、
-无外链 CSS/JS、无外部图片，断网或拷给别人都能直接双击打开。
+Standard library only; the charts are hand-written inline SVG. The whole file has
+no external references - no CDN, no linked CSS/JS, no remote images - so it opens
+by double-click, offline, or after being copied to someone else.
 
-读数据的逻辑复用同目录的 generic.py（collect / select_metrics / segments / fmt），
-不重写一遍。
+The data reading reuses generic.py from the same directory (collect /
+select_metrics / segments / fmt) rather than reimplementing it.
 
-一般由 exp report 调用，不直接手敲：
-  report.py --out 报告.html --name demo-sft --machine local --dir <运行目录> \
-            --method sft --series-json <序列.json> --plan <PLAN.md> --health <健康.tsv>
+Normally invoked by exp report rather than typed by hand:
+  report.py --out report.html --name demo-sft --machine local --dir <run dir> \\
+            --method sft --series-json <series.json> --plan <PLAN.md> --health <health.tsv>
 """
 
 import argparse
@@ -28,17 +30,25 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import generic  # noqa: E402  （同目录，复用它的读数据逻辑）
+import generic  # noqa: E402  (same directory; reuse its data reading)
 
-# ---- 从判据文字里认指标、方向和数值 ---------------------------------------
+# ---- recognize the metric, direction and value in a criterion sentence ------
 NUMBER_RE = re.compile(r"[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
 
-# 「低」优先于「以上」：判据常写成「比 baseline 低 0.02 以上」，
-# 这里的「以上」修饰的是幅度，方向仍是「低」。
-LOWER_WORDS = ("低", "降", "小", "少", "以内", "以下", "不超过", "小于", "减少")
-HIGHER_WORDS = ("高", "涨", "大", "多", "以上", "超过", "大于", "提升", "上升")
+# "lower" is checked before "above": a criterion is often phrased as "more than
+# 0.02 lower than the baseline", where "more than" modifies the magnitude while
+# the direction is still "lower". Chinese wording is kept alongside the English
+# so existing PLAN.md files in Chinese keep working.
+LOWER_WORDS = ("低", "降", "小", "少", "以内", "以下", "不超过", "小于", "减少",
+               "lower", "less", "below", "under", "smaller", "decrease", "decreased",
+               "reduce", "reduced", "within", "at most", "no more than", "drop", "drops")
+HIGHER_WORDS = ("高", "涨", "大", "多", "以上", "超过", "大于", "提升", "上升",
+                "higher", "above", "over", "greater", "larger", "increase", "increased",
+                "improve", "improved", "exceed", "exceeds", "at least", "no less than",
+                "gain", "gains")
 
-# PLAN 里写的是人话，指标名是代码里的键，中间靠这张别名表搭桥
+# The PLAN is written in prose; metric names are keys in the code. This table
+# bridges the two.
 ALIASES = {
     "acc": ("accuracy", "accuracies", "准确率", "准确度"),
     "margin": ("margin", "margins", "边界"),
@@ -53,27 +63,33 @@ def esc(text):
     return html.escape(str(text), quote=True)
 
 
-def plan_field(text, field):
-    """从 PLAN.md 全文里取「字段：值」。全角/半角冒号都认，行首允许 - 或 *。"""
+def plan_field(text, fields):
+    """Pull "field: value" out of the full PLAN.md text. Accepts both the
+    full-width and the ASCII colon; a leading - or * is allowed. `fields` is a
+    single name or a tuple of accepted names."""
+    if isinstance(fields, str):
+        fields = (fields,)
     for raw in text.splitlines():
         line = raw.strip().lstrip("-*").strip()
-        for sep in ("：", ":"):
-            if line.startswith(field + sep):
-                return line.split(sep, 1)[1].strip()
+        for field in fields:
+            for sep in ("：", ":"):
+                if line.startswith(field + sep):
+                    return line.split(sep, 1)[1].strip()
     return ""
 
 
 def _hit(token, low):
-    """token 是否出现在 text（已小写）里。ASCII 词要求词边界，避免 lr 命中别处。"""
+    """Whether token appears in text (already lowercased). ASCII words require a
+    word boundary, so lr doesn't match somewhere in the middle of another word."""
     if token.isascii():
         return re.search(r"(?<![a-z0-9])" + re.escape(token) + r"(?![a-z0-9])", low) is not None
     return token in low
 
 
 def match_metric(text, keys):
-    """从判据文字里认出说的是哪个指标。认不出返回 None。"""
+    """Work out which metric the criterion is talking about. None if unrecognized."""
     low = text.lower()
-    best = None  # (指标名, 命中的词长)
+    best = None  # (metric name, length of the matched token)
     for key in keys:
         if key.lower() in ("step", "epoch"):
             continue
@@ -89,13 +105,15 @@ def match_metric(text, keys):
 
 
 def parse_criterion(text, keys):
-    """把判据一句话拆成 {指标, 方向, 数值, 是否相对 baseline}。拆不动也不报错。"""
+    """Split a criterion sentence into {metric, direction, value, relative to
+    baseline}. Returns quietly when it can't be split."""
     text = (text or "").strip()
     if not text:
         return None
-    if any(w in text for w in LOWER_WORDS):
+    low = text.lower()
+    if any(w in low for w in LOWER_WORDS):
         direction = "lower"
-    elif any(w in text for w in HIGHER_WORDS):
+    elif any(w in low for w in HIGHER_WORDS):
         direction = "higher"
     else:
         direction = None
@@ -105,24 +123,28 @@ def parse_criterion(text, keys):
         "metric": match_metric(text, keys),
         "direction": direction,
         "delta": numbers[-1] if numbers else None,
-        "relative": ("baseline" in text.lower()) or ("比" in text),
+        "relative": ("baseline" in low) or ("比" in text) or (" than " in low)
+                    or (" vs " in low) or ("relative to" in low),
     }
 
 
 def criterion_line(crit, series):
-    """把判据落成一条能画的绝对阈值线。落不下来（没指标/没数值/没方向）返回 None。"""
+    """Turn the criterion into an absolute threshold line that can be drawn.
+    Returns None when it can't be pinned down (no metric / no number / no
+    direction)."""
     if not crit or not crit["metric"] or crit["delta"] is None or not crit["direction"]:
         return None
     values = series.get(crit["metric"]) or []
     if not values:
         return None
     if crit["relative"]:
-        # 「比 baseline 低 0.02」——baseline 的数值不在本次数据里，
-        # 只能拿本次起点均值当参照，并在图上写明。
+        # "0.02 lower than the baseline" - the baseline's own value isn't in this
+        # data, so the run's own starting mean stands in for it, and the chart
+        # says so.
         head = values[: max(1, len(values) // 8)]
         base = sum(head) / len(head)
         value = base - crit["delta"] if crit["direction"] == "lower" else base + crit["delta"]
-        note = f"以本次起点均值 {generic.fmt(base)} 为参照（PLAN 未给 baseline 数值）"
+        note = f"using this run's starting mean {generic.fmt(base)} as the reference (the PLAN gives no baseline value)"
     else:
         value = crit["delta"]
         note = None
@@ -130,7 +152,8 @@ def criterion_line(crit, series):
 
 
 def svg_chart(name, values, steps, seg_count, line=None, width=760, height=210):
-    """一个指标一张图：原始曲线（细）+ 分段均值（粗点线）+ 判据参考线/达标区。"""
+    """One chart per metric: raw curve (thin) + segment means (heavy dotted) +
+    criterion reference line and pass zone."""
     pad_l, pad_r, pad_t, pad_b = 62, 18, 16, 28
     plot_w, plot_h = width - pad_l - pad_r, height - pad_t - pad_b
     n = len(values)
@@ -148,7 +171,7 @@ def svg_chart(name, values, steps, seg_count, line=None, width=760, height=210):
     def y_at(v):
         return pad_t + (1 - (v - vmin) / (vmax - vmin)) * plot_h
 
-    out = [f'<svg viewBox="0 0 {width} {height}" role="img" aria-label="{esc(name)} 趋势">']
+    out = [f'<svg viewBox="0 0 {width} {height}" role="img" aria-label="{esc(name)} trend">']
 
     for k in range(5):
         value = vmin + (vmax - vmin) * k / 4
@@ -167,7 +190,7 @@ def svg_chart(name, values, steps, seg_count, line=None, width=760, height=210):
         sign = "≥" if line["direction"] == "higher" else "≤"
         out.append(
             f'<text x="{width - pad_r - 4}" y="{y - 6:.1f}" class="tick crit-label">'
-            f'判据 {sign} {esc(generic.fmt(line["value"]))}</text>'
+            f'criterion {sign} {esc(generic.fmt(line["value"]))}</text>'
         )
 
     raw = " ".join(f"{x_at(i):.1f},{y_at(v):.1f}" for i, v in enumerate(values))
@@ -283,50 +306,54 @@ def build_html(*, name, machine, run_dir, method, source, series, plan_text, hea
     points = max((len(v) for v in series.values()), default=0)
     seg_count = max(1, min(segments_count, points)) if points else segments_count
 
-    crit_text = plan_field(plan_text, "判据")
-    pred_text = plan_field(plan_text, "预测")
+    crit_text = plan_field(plan_text, ("Criterion", "判据"))
+    pred_text = plan_field(plan_text, ("Prediction", "预测"))
     criterion = parse_criterion(crit_text, keys)
     crit_line = criterion_line(criterion, series)
 
-    # 判据标注带：无论能不能落成阈值线，判据本身都要摆在图的正上方
+    # Criterion band: whether or not it resolves to a threshold line, the
+    # criterion itself belongs directly above the charts.
     if crit_text:
         band = (
-            '<div class="band"><div class="band-tag">判据</div>'
+            '<div class="band"><div class="band-tag">criterion</div>'
             f'<div class="band-text">{esc(crit_text)}</div></div>'
         )
         if crit_line:
             sign = "≥" if crit_line["direction"] == "higher" else "≤"
             value = f'<b>{esc(crit_line["metric"])} {sign} {esc(generic.fmt(crit_line["value"]))}</b>'
             if crit_line["note"]:
-                # 参照是从本次数据里取的，不是 PLAN 里的原始判据。话得说清楚：
-                # 把「按判据推出来的线」说成「判据本身」，正是这个仓库要防的那件事。
+                # The reference was taken from this run's own data, not from the
+                # PLAN. Say so plainly: passing off a line derived from the
+                # criterion as the criterion itself is exactly what this repo
+                # exists to prevent.
                 band += (
-                    f'<p class="band-note">图上那条紫色虚线是按这条判据<em>推出来</em>的参考线：'
-                    f'{value}，{esc(crit_line["note"])}。紫色阴影是达标区。'
-                    f'它不是判据本身，读数仍以 PLAN 里那句为准。</p>'
+                    f'<p class="band-note">The purple dashed line on the chart is a reference line '
+                    f'<em>derived</em> from this criterion: {value}, {esc(crit_line["note"])}. '
+                    f'The purple shading is the pass zone. It is not the criterion itself - '
+                    f'reading still goes by what the PLAN says.</p>'
                 )
             else:
                 band += (
-                    f'<p class="band-note">图上那条紫色虚线就是这条判据：'
-                    f'{value}。紫色阴影是达标区。</p>'
+                    f'<p class="band-note">The purple dashed line on the chart is this criterion: '
+                    f'{value}. The purple shading is the pass zone.</p>'
                 )
         else:
-            band += '<p class="band-note">这条判据认不出可画的指标或数值，所以只作为标注带放在这里。</p>'
+            band += '<p class="band-note">No plottable metric or value could be recognized in this criterion, so it appears as an annotation band only.</p>'
     else:
         band = (
-            '<div class="band empty"><div class="band-tag">判据</div>'
-            '<div class="band-text">（没写）—— 这是最容易被跳过、也最要紧的一项。'
-            '跑之前用 exp plan 补上。</div></div>'
+            '<div class="band empty"><div class="band-tag">criterion</div>'
+            '<div class="band-text">(not written) - the item most often skipped, and the one that '
+            'matters most. Fill it in before the run with exp plan.</div></div>'
         )
 
     pred = (
-        f'<div class="band"><div class="band-tag">预测</div>'
+        f'<div class="band"><div class="band-tag">prediction</div>'
         f'<div class="band-text">{esc(pred_text)}</div></div>'
         if pred_text else
-        '<p class="empty">（预测：没写）</p>'
+        '<p class="empty">(prediction: not written)</p>'
     )
 
-    # 健康检查
+    # health checks
     rows = []
     for raw in health.splitlines():
         if not raw.strip():
@@ -337,9 +364,9 @@ def build_html(*, name, machine, run_dir, method, source, series, plan_text, hea
             f'<li class="h-{esc(status)}"><span class="h-dot"></span>'
             f'<span class="h-label">{esc(label)}</span><span class="h-value">{esc(value)}</span></li>'
         )
-    health_html = f'<ul class="health">{"".join(rows)}</ul>' if rows else '<p class="empty">（没做健康检查）</p>'
+    health_html = f'<ul class="health">{"".join(rows)}</ul>' if rows else '<p class="empty">(no health checks)</p>'
 
-    # 曲线
+    # charts
     if metrics:
         charts = []
         for metric in metrics:
@@ -351,21 +378,21 @@ def build_html(*, name, machine, run_dir, method, source, series, plan_text, hea
             charts.append(
                 '<figure class="chart">'
                 f'<figcaption><span class="c-name">{esc(metric)}</span>'
-                f'<span class="c-change">变化 {esc(generic.fmt(change))}</span></figcaption>'
+                f'<span class="c-change">change {esc(generic.fmt(change))}</span></figcaption>'
                 f'{svg_chart(metric, values, steps if len(steps) == len(values) else [], count, line)}'
                 '</figure>'
             )
         charts_html = "".join(charts)
         legend = (
-            '<p class="legend"><span class="k raw-k"></span>逐步原始值'
-            '<span class="k mean-k"></span>分段均值'
-            '<span class="k crit-k"></span>判据参考线</p>'
+            '<p class="legend"><span class="k raw-k"></span>raw per-step'
+            '<span class="k mean-k"></span>segment mean'
+            '<span class="k crit-k"></span>criterion line</p>'
         )
     else:
-        charts_html = '<p class="empty">这个目录里没找到可读的指标。找过 *.jsonl、trainer_state.json、events.out.tfevents.*、*.log。</p>'
+        charts_html = '<p class="empty">No readable metrics found in this directory. Looked for *.jsonl, trainer_state.json, events.out.tfevents.*, *.log.</p>'
         legend = ""
 
-    # 分段均值表
+    # segment means table
     if metrics:
         head = "".join(f"<th>{i + 1}</th>" for i in range(seg_count))
         body = []
@@ -377,43 +404,43 @@ def build_html(*, name, machine, run_dir, method, source, series, plan_text, hea
                 f'<td class="chg">{esc(generic.fmt(segs[-1] - segs[0]))}</td></tr>'
             )
         table = (
-            f'<table class="seg"><thead><tr><th>指标</th>{head}<th>变化</th></tr></thead>'
+            f'<table class="seg"><thead><tr><th>metric</th>{head}<th>change</th></tr></thead>'
             f'<tbody>{"".join(body)}</tbody></table>'
         )
-        source_note = f'来源: {esc(source)} ｜ 共 {points} 个点 ｜ 切 {seg_count} 段'
+        source_note = f'source: {esc(source)} | {points} points | {seg_count} segments'
     else:
         table = ""
         source_note = ""
 
     return f"""<!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>实验报告 · {esc(name)}</title>
+<title>Run report · {esc(name)}</title>
 <style>{CSS}</style>
 </head>
 <body>
 <main>
-<h1>{esc(name)} 实验报告</h1>
-<p class="meta">机器 <b>{esc(machine)}</b> ｜ 方法 <b>{esc(method)}</b> ｜ 目录 <b>{esc(run_dir)}</b> ｜ 生成于 {esc(generated_at)}</p>
+<h1>{esc(name)} run report</h1>
+<p class="meta">machine <b>{esc(machine)}</b> | method <b>{esc(method)}</b> | dir <b>{esc(run_dir)}</b> | generated {esc(generated_at)}</p>
 
-<h2>事前记录</h2>
+<h2>Pre-registration</h2>
 {band}
 {pred}
 
-<h2>健康检查</h2>
+<h2>Health checks</h2>
 {health_html}
 
-<h2>趋势曲线</h2>
+<h2>Trend</h2>
 {legend}
 {charts_html}
 
-<h2>分段均值（{seg_count} 段）</h2>
+<h2>Segment means ({seg_count} segments)</h2>
 <p class="meta">{esc(source_note)}</p>
 {table}
 
-<footer>由 exp report 生成 ｜ 单文件自包含，无外部引用，可离线打开</footer>
+<footer>Generated by exp report | single self-contained file, no external references, opens offline</footer>
 </main>
 </body>
 </html>
@@ -421,18 +448,18 @@ def build_html(*, name, machine, run_dir, method, source, series, plan_text, hea
 
 
 def main():
-    parser = argparse.ArgumentParser(description="把一次运行渲染成自包含的 HTML 报告")
-    parser.add_argument("--out", required=True, help="报告写到哪里")
+    parser = argparse.ArgumentParser(description="Render one run as a self-contained HTML report")
+    parser.add_argument("--out", required=True, help="where to write the report")
     parser.add_argument("--name", default="")
     parser.add_argument("--machine", default="")
     parser.add_argument("--dir", dest="run_dir", default="")
     parser.add_argument("--method", default="")
-    parser.add_argument("--series-json", default="", help="generic.py --json 的输出文件")
-    parser.add_argument("--plan", default="", help="PLAN.md 全文")
-    parser.add_argument("--health", default="", help="健康检查 TSV（状态<TAB>标签<TAB>值）")
+    parser.add_argument("--series-json", default="", help="the file written by generic.py --json")
+    parser.add_argument("--plan", default="", help="the full PLAN.md text")
+    parser.add_argument("--health", default="", help="health check TSV (status<TAB>label<TAB>value)")
     parser.add_argument("--segments", type=int, default=generic.DEFAULT_SEGMENTS)
     parser.add_argument("--limit", type=int, default=generic.DEFAULT_LIMIT)
-    parser.add_argument("--all", action="store_true", help="连 step/epoch 这类元数据也画")
+    parser.add_argument("--all", action="store_true", help="also chart step/epoch-style metadata")
     args = parser.parse_args()
 
     series, source = {}, None
@@ -442,10 +469,10 @@ def main():
             series = data.get("series") or {}
             source = data.get("source")
         except (json.JSONDecodeError, AttributeError):
-            print(f"读不了序列 JSON：{args.series_json}（读取器可能不支持 --json）", file=sys.stderr)
+            print(f"cannot read the series JSON: {args.series_json} (the reader may not support --json)", file=sys.stderr)
 
     doc = build_html(
-        name=args.name or "(未命名)",
+        name=args.name or "(unnamed)",
         machine=args.machine,
         run_dir=args.run_dir,
         method=args.method,

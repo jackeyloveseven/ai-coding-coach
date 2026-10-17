@@ -1,40 +1,40 @@
-# exptool —— 训练实验的统一入口
+# exptool — one entry point for training runs
 
-`exp` 把「启动、查看、续跑实验」这套动作收在一个命令里。它本身没什么魔法，核心是两条：
+`exp` collects the start / inspect / resume cycle for training runs into a single command. There's no magic in it. Two principles:
 
-1. **每条命令执行前都打印它背后真正跑的那条命令**（灰色的 `+ ssh ...`）。复制下来自己改着用，熟了以后不用这个工具也能干。
-2. **读数看趋势，不看单步**。把整段训练切成若干段比较均值，因为单步值跳动大、没有信息量。
+1. **Every command prints the command it actually runs first** (the grey `+ ssh ...`). Copy it, modify it, use it directly — once you're comfortable you don't need the tool.
+2. **Read the trend, not the step.** Cut the run into segments and compare means, because single-step values jump around and carry no information.
 
-这个目录是 [ai-coding-coach](../) skill 的配套工具。skill 里 `references/training-run-literacy.md` 讲的是判断方法，这里是那套方法的执行入口。
+This directory is the companion tooling for the [ai-coding-coach](../) skill. `references/training-run-literacy.md` in the skill covers the judgment; this is the execution entry point for that method.
 
-> **这是脱敏的通用版。** 主机名、共享盘路径、奖励服务地址全部走配置文件，仓库里只有占位符。你按自己的环境填。
+> **This is the sanitized, generic build.** Hostnames, shared-disk paths and reward-service addresses all come from a config file — the repository holds only placeholders. Fill in your own environment.
 
 ---
 
-## 快速开始（本地就能跑，不需要集群）
+## Quick start (runs locally; no cluster needed)
 
 ```bash
 cd exptool
 cp runs.conf.example runs.conf
-./exp list              # 应该看到 demo-sft
-./exp status demo-sft   # 看示例实验的进度
+./exp list              # you should see demo-sft
+./exp status demo-sft   # look at the example run's progress
 ```
 
-> 用 zip 下载的话记得先 `chmod +x exp`；`git clone` 不需要，可执行位是带着的。
+> If you downloaded a zip, `chmod +x exp` first. `git clone` preserves the executable bit, so it isn't needed there.
 
-`runs.conf.example` 里的机器列写的是 `local`，表示就在本机跑、不走 ssh。`examples/demo-sft/` 是一个假的实验目录，用来让你先看清输出长什么样。
+The machine column in `runs.conf.example` is `local`, meaning it runs on this machine and never goes over ssh. `examples/demo-sft/` is a fake run directory, there so you can see what the output looks like before wiring in anything real.
 
-接你自己的集群：
+Pointing it at your own cluster:
 
 ```bash
 mkdir -p ~/.config/exptool
 cp exptool.conf.example ~/.config/exptool/config
 cp runs.conf.example ~/.config/exptool/runs.conf
-# 改这两个文件，填你自己的机器和实验
+# edit both files with your own machines and runs
 ./exp list
 ```
 
-`exp` 本身可以直接放在 `~/bin` 下：
+`exp` itself can live in `~/bin`:
 
 ```bash
 ln -s "$PWD/exp" ~/bin/exp
@@ -42,197 +42,197 @@ ln -s "$PWD/exp" ~/bin/exp
 
 ---
 
-## 命令
+## Commands
 
-| 命令 | 干什么 |
+| Command | What it does |
 |---|---|
-| `exp list` | 登记了哪些实验，哪些还在跑 |
-| `exp status [名字]` | 进度、指标趋势、健康检查（默认看登记表第一行那个） |
-| `exp log [名字]` | 实时滚动看日志（Ctrl+C 退出，训练不会停） |
-| `exp errors [名字]` | 搜报错 |
-| `exp gpu <机器>` | 看某台机器的卡空不空 |
-| `exp start <名字>` | 启动（先给你看 GPU，确认后才起） |
-| `exp stop <名字>` | 停止 |
-| `exp attach [名字]` | 进 tmux 画面（退出按 Ctrl+B 再按 D） |
-| `exp config [名字]` | 打印这个实验的 `launch.sh` |
-| `exp plan [名字]` | 事前记录：没有就生成模板，有就打印全文 |
-| `exp report [名字]` | 生成一份自包含的 HTML 报告（曲线 + 判据参考线 + 健康检查） |
+| `exp list` | Which runs are registered, and which are still going |
+| `exp status [name]` | Progress, metric trend, health checks (defaults to the first registry row) |
+| `exp log [name]` | Follow the log live (Ctrl+C to exit; the training keeps running) |
+| `exp errors [name]` | Search for errors |
+| `exp gpu <machine>` | See whether a machine's GPUs are free |
+| `exp start <name>` | Start it (shows you the GPUs and asks before launching) |
+| `exp stop <name>` | Stop it |
+| `exp attach [name]` | Attach to the tmux session (exit with Ctrl+B then D) |
+| `exp config [name]` | Print this run's `launch.sh` |
+| `exp plan [name]` | Pre-registration: generates the template if absent, prints it if present |
+| `exp report [name]` | Render a self-contained HTML report (curves + criterion line + health checks) |
 
 ---
 
-## 登记实验：`runs.conf`
+## Registering runs: `runs.conf`
 
-一行一个实验，六列，空格或 Tab 分隔。`#` 开头的行和空行忽略。
+One run per line, six columns, separated by spaces or tabs. Lines starting with `#` and blank lines are ignored.
 
 ```
-名字             机器    目录                   方法      tmux   说明
-demo-sft         local   ./examples/demo-sft    sft       -      示例
-hps-185          node-5  /shared/runs/awm_long  awm-hps   awm-1  400 步长跑
+name             machine  dir                    method   tmux   note
+demo-sft         local   ./examples/demo-sft    sft       -      example
+hps-185          node-5  /shared/runs/awm_long  awm-hps   awm-1  long run, 400 steps
 ```
 
-| 列 | 说明 |
+| Column | Meaning |
 |---|---|
-| 名字 | 随便取，不和别人重复就行。`exp status` / `log` / `start` 都用它 |
-| 机器 | `ssh` 得通的主机名；写 `local` 表示就在本机跑 |
-| 目录 | **要写到具体那一次运行**。同一个 SFT 下面同时有 `smoke/` 和 `formal/`，就写 `formal/`，否则两次运行的记录会混在一起 |
-| 方法 | 决定用哪个脚本看进度，见下节 |
-| tmux | 写 `-` 表示不归 `exp start/stop` 管（别人起的、或已经结束了） |
-| 说明 | 随便写，最后一个字段，可以带空格 |
+| name | Anything, as long as it's unique. `exp status` / `log` / `start` all use it |
+| machine | A hostname `ssh` can reach; write `local` to run on this machine |
+| dir | **Point at the individual run.** If one SFT experiment has both `smoke/` and `formal/` under it, write `formal/`, or the records from the two runs get mixed together |
+| method | Decides which script reads progress — see the next section |
+| tmux | Write `-` to say `exp start/stop` doesn't manage it (someone else started it, or it has finished) |
+| note | Anything. Last field, so it may contain spaces |
 
 ---
 
-## 事前记录：`PLAN.md`
+## Pre-registration: `PLAN.md`
 
-跑之前该写的六项（假设、对照、变量、判据、预算与止损、预测）放在实验目录下的 `PLAN.md` 里，`exp` 会认：
+The six items to write before a run (hypothesis, control, variable, criterion, budget and stop-loss, prediction) live in a `PLAN.md` in the run directory, and `exp` reads it:
 
 ```bash
-exp plan demo-sft     # 没有就生成模板，有就打印全文
+exp plan demo-sft     # generates the template if absent, prints it if present
 ```
 
-模板长这样：
+The template looks like this:
 
 ```
-假设：我认为 <改动> 会让 <指标> 变好，因为 <理由>
-对照：baseline 是 <什么>，和实验组同预算、同数据、同评测
-变量：这次只改 <一件事>
-判据：用 <指标> 判断，涨过 <多少> 才算有效（事前定，别看完结果再定）
-预算与止损：最多跑 <多久>，出现 <什么现象> 就提前停
-预测：我觉得结果会是 <什么>，把握 <高/中/低>
+Hypothesis: I think <the change> will improve <the metric>, because <the reason>
+Control: the baseline is <what>, at the same budget, same data, same evaluation
+Variable: this run changes only <one thing>
+Criterion: judge by <metric>; it counts only if it moves past <how much> (decide now, not after seeing the result)
+Budget and stop-loss: run for at most <how long>; stop early if <what happens>
+Prediction: I expect <what>, confidence <high/medium/low>
 ```
 
-填完之后，`exp status` 会把**判据**和**预测**印在指标正上方：
+Once it's filled in, `exp status` prints the **criterion** and the **prediction** directly above the metrics:
 
 ```
-事前记录
-  判据: 用固定 dev 集上的 eval loss 判断，比 baseline 低 0.02 以上才算有效
-  预测: 我觉得 eval loss 会低 0.01~0.03，把握中
-  （全文: exp plan demo-sft）
+pre-registration
+  criterion: judge by eval loss on the fixed dev set; it must come in at least 0.02 lower than the baseline
+  prediction: I expect eval loss 0.01-0.03 lower, confidence medium
+  (full text: exp plan demo-sft)
 ```
 
-**为什么单为这一条做功能**：结果出来之后再定「涨多少算有效」，几乎总会得出「有效」的结论。把判据摆在数字旁边，是为了让你读数的那一刻就对照跑之前定下的标准，而不是回头找理由。
+**Why this gets its own feature**: deciding "how much counts as an improvement" after the results are in will almost always produce "it improved". Putting the criterion next to the number forces you to check against the standard you set before the run, rather than hunting for a justification afterwards.
 
-字段名全角冒号（`判据：`）和半角（`判据:`）都认，行首可以带 `-`。没写 `PLAN.md` 不拦着你，`status` 里只提醒一句。
+Field names accept both the full-width colon (`判据：`) and the ASCII one (`Criterion:`), and a leading `-` is allowed. The Chinese field names are still recognized, so existing PLAN files keep working. A missing `PLAN.md` doesn't block you — `status` just flags it.
 
 ---
 
-## 进度读取器
+## Progress readers
 
-**方法**列写 `awm-hps`，`exp` 会去找 `progress/awm.py`——只看 `-` 前面那段，后面随你写，用来区分奖励模型之类。找不到同名脚本就用 `progress/generic.py`。
+With a **method** column of `awm-hps`, `exp` looks for `progress/awm.py` — only the part before the `-`, so the rest is free for distinguishing reward models and the like. With no matching script it falls back to `progress/generic.py`.
 
-所以 `sft`、`dpo`、`diffusionnft` 不写任何代码也能直接看。
+That means `sft`, `dpo` and `diffusionnft` work with no code at all.
 
 ### `generic.py`
 
-按这个顺序找指标，用找到的第一种：
+It looks for metrics in this order and uses the first source it finds:
 
-| 来源 | 谁会写 |
+| Source | Who writes it |
 |---|---|
-| `*.jsonl`（每行一个 JSON） | 自己写的训练代码、webtrainer、AWM |
-| `trainer_state.json` | HuggingFace Trainer，TRL 的 SFT、DPO 都会写 |
-| `events.out.tfevents.*` | tensorboard；要求远端装了 tensorboard |
-| 日志里的 `loss=0.12`、`reward: 0.5` 这类文字 | 几乎所有训练脚本 |
+| `*.jsonl` (one JSON object per line) | your own training code, webtrainer, AWM |
+| `trainer_state.json` | HuggingFace Trainer; TRL's SFT and DPO both write it |
+| `events.out.tfevents.*` | tensorboard; requires tensorboard installed remotely |
+| text in the log, such as `loss=0.12` or `reward: 0.5` | nearly every training script |
 
 ```bash
-python3 progress/generic.py <运行目录>
-python3 progress/generic.py <运行目录> --segments 10   # 改段数（默认 8）
-python3 progress/generic.py <运行目录> --limit 8       # 多看几个指标（默认 6）
-python3 progress/generic.py <运行目录> --all           # 连 step/epoch 也一起显示
-python3 progress/generic.py <运行目录> --json          # 打原始序列的 JSON（exp report 画曲线用）
+python3 progress/generic.py <run dir>
+python3 progress/generic.py <run dir> --segments 10   # change the segment count (default 8)
+python3 progress/generic.py <run dir> --limit 8       # show more metrics (default 6)
+python3 progress/generic.py <run dir> --all           # also show step/epoch
+python3 progress/generic.py <run dir> --json          # raw series as JSON (for exp report to plot)
 ```
 
-输出长这样：
+The output looks like this:
 
 ```
-来源: metrics.jsonl ｜ 共 240 个点 ｜ 切 8 段
-指标                       1         2         3         4         5         6         7         8       变化
-grad_norm               1.47      1.14     0.904     0.736     0.599     0.502     0.444     0.402      -1.07
-loss                    2.27      1.42     0.958     0.661     0.506     0.404     0.368     0.325      -1.95
-lr                  1.88e-05  1.65e-05  1.42e-05  1.19e-05  9.58e-06  7.27e-06  4.96e-06  2.65e-06  -1.62e-05
-rewards/accuracies     0.584     0.716     0.795     0.854     0.886     0.906      0.92      0.93      0.346
+source: metrics.jsonl | 64 points | 8 segments
+metric                     1         2         3         4         5         6         7         8     change
+grad_norm               1.45      1.11     0.893     0.717     0.596     0.512     0.462     0.394      -1.05
+loss                    2.22      1.44     0.957     0.662     0.495     0.423     0.361      0.34      -1.88
+lr                  1.87e-05  1.64e-05  1.41e-05  1.19e-05  9.57e-06  7.29e-06  5.00e-06  2.71e-06  -1.60e-05
+rewards/accuracies     0.592      0.71     0.792     0.847     0.889     0.913      0.92     0.932       0.34
 ```
 
-名字里带 `loss`、`reward`、`acc`、`margin`、`grad`、`kl`、`lr` 的优先显示。`step`、`epoch` 这类元数据默认不占显示位（`--all` 可以放出来）。
+Names containing `loss`, `reward`, `acc`, `margin`, `grad`, `kl` or `lr` sort first. `step`/`epoch`-style metadata doesn't take a display slot by default (`--all` releases it).
 
-### 写一个专用读取器
+### Writing a dedicated reader
 
-当这个方法的收益不能靠训练 loss 看出来时，就需要一个专用的。典型是 RL 那类——训练奖励每步换题，跳动很大，盯着看没有信息量，真正说明问题的是**固定评测集**上的分数。
+You need one when the method's payoff can't be read off the training loss. RL-style methods are the usual case — the training reward changes prompts every step and swings wildly, so staring at it tells you nothing. What actually shows progress is the score on a **fixed eval set**.
 
-复制 `progress/example.py`，改名成 `progress/<你的方法>.py`，把读文件那段改成你的格式。文件头的注释写了约定。
+Copy `progress/example.py`, rename it to `progress/<your method>.py`, and replace the file-reading part with your format. The convention is documented in the file header.
 
 ---
 
-## 健康检查
+## Health checks
 
-`exp status` 会看这几项：
+`exp status` looks at these:
 
-- **tmux 还在不在**。不在了就 `exp errors` 看报错。
-- **标记文件**（默认找 `FAILED` 和 `DONE`，可在配置里改）。
-- **日志最后更新**。超过 30 分钟没动，可能卡在奖励服务、NCCL 或死锁上。
-- **奖励服务**（配了 `REWARD_HEALTH_URL` 才查）。返回 `200` 或 `401` 都算活着（`401` 只是没带凭证），`000` 是没响应。
+- **Is the tmux session still there.** If not, run `exp errors` to see the failure.
+- **Marker files** (looks for `FAILED` and `DONE` by default; configurable).
+- **When the log last changed.** Over 30 minutes of silence may mean it's stuck on the reward service, on NCCL, or in a deadlock.
+- **The reward service** (only checked when `REWARD_HEALTH_URL` is set). HTTP `200` or `401` both mean it's up (`401` just means no credentials were sent); `000` means no response.
 
 ---
 
-## 报告：`exp report`
+## Reports: `exp report`
 
-`exp status` 是纯文本表格，但训练曲线本来就是图的东西——用表格看，正是 `training-run-literacy.md` 里批评的「盯单步」。`exp report` 把一次运行渲染成一份**自包含的 HTML**：
+`exp status` is a plain-text table, but training curves are what graphs are for — reading them in a table is exactly the "staring at single steps" that `training-run-literacy.md` warns against. `exp report` renders one run as a **self-contained HTML file**:
 
 ```bash
-exp report demo-sft                        # 写到 ./exp-report-demo-sft.html
-exp report demo-sft --out ~/桌面/看看.html  # 换个地方
+exp report demo-sft                          # writes ./exp-report-demo-sft.html
+exp report demo-sft --out ~/Desktop/look.html  # somewhere else
 ```
 
-报告里有：
+The report contains:
 
-- **实验信息**：名字、机器、目录、方法。
-- **事前记录**：`PLAN.md` 里的**判据**和**预测**。判据不只是印一行字——它会尽量落成图上的一条**紫色虚线 + 达标区**，把「跑之前定的标准」摆到读数的那一刻眼前。认得出指标和数值就画线，认不出就退化成图上方的一条**标注带**（不会瞎画）。
-- **趋势曲线**：每个指标一张内联 SVG，细线是逐步原始值、粗点线是分段均值，一眼看走向。
-- **分段均值表**：和 `exp status` 同一份 8 段均值。
-- **健康检查**：和 `exp status` 同一份逻辑（tmux、标记文件、日志更新、奖励服务）。
+- **Run info**: name, machine, directory, method.
+- **Pre-registration**: the **criterion** and **prediction** from `PLAN.md`. The criterion isn't just a line of text — wherever possible it becomes a **purple dashed line plus a pass zone** on the chart, putting the standard you set before the run in front of you at the moment you read the numbers. If it can recognize the metric and the value it draws the line; if not, it degrades to an **annotation band** above the chart rather than drawing something wrong.
+- **Trend curves**: one inline SVG per metric — thin line is the raw per-step value, heavy dotted line is the segment mean, so the direction reads at a glance.
+- **Segment means table**: the same 8-segment means as `exp status`.
+- **Health checks**: the same logic as `exp status` (tmux, marker files, log freshness, reward service).
 
-几个刻意定下的约束：
+A few deliberate constraints:
 
-- **零依赖**。只用 Python 标准库，图是手写的内联 SVG，没有 matplotlib、没有 jinja2。整个仓库的「零依赖」不变。
-- **单文件自包含**。没有任何外部引用——无 CDN、无外链 CSS/JS、无外部图片。断网、离线、拷给别人都能直接双击打开。
-- **输出到当前目录**，不写进运行目录（那可能是共享盘、只读或别人的）。默认 `./exp-report-<名字>.html`，用 `--out <路径>` 或配置里的 `REPORT_DIR` 改。
-- 数据来源用**方法专用读取器**（没有就用 `generic.py`）；专用读取器要支持 `--json` 才会出现在报告里（`generic.py` 已经支持）。认不出指标也不影响出报告——判据和健康检查照常。
+- **Zero dependencies.** Python standard library only; the charts are hand-written inline SVG. No matplotlib, no jinja2. The repository's zero-dependency property holds.
+- **Single self-contained file.** No external references at all — no CDN, no linked CSS/JS, no remote images. Offline, on a plane, or copied to someone else, it opens by double-click.
+- **Outputs to the current directory**, not the run directory (which may be shared, read-only, or someone else's). Defaults to `./exp-report-<name>.html`; change it with `--out <path>` or `REPORT_DIR` in the config.
+- Data comes from the **method-specific reader** (falling back to `generic.py`). A dedicated reader has to support `--json` to appear in the report (`generic.py` already does). Failing to recognize a metric doesn't stop the report — the criterion and health checks still come through.
 
-渲染在本机跑（要读本机文件、写本机文件），所以配置里多了一项 `LOCAL_PYTHON`（留空就用 `REMOTE_PYTHON`）。
-
----
-
-## 哪些验证过，哪些没有
-
-这个工具是照着一份使用手册重写的（原实现不在手边），所以要说清楚边界：
-
-**在本地跑过、有测试覆盖的：**
-
-- `progress/generic.py` 的全部逻辑——来源优先级、坏数据跳过、日志文字解析、分段、指标筛选，以及给 `exp report` 复用的 `select_metrics` / `dump_json`。52 项断言，`python3 tests/test_generic.py`
-- `exp list / status / config / plan / errors / report / help` 在 `local` 模式下的完整链路，事前记录的读取与生成（含全角/半角冒号两种写法），报告生成（文件落盘、含各指标名与 `PLAN.md` 判据文字、判据画成参考线、默认写到当前目录、文件里没有任何外部 URL），以及各种错误路径（不认识的命令、不认识的实验、登记表不存在）。39 项断言，`bash tests/test_exp.sh`
-
-**没有验证过的（没有集群可测）：**
-
-- 走 ssh 的那条路（`run_on` 的远端分支，含 `exp report` 的远端取序列）——逻辑和本地分支对称，但没实跑过
-- `exp start / stop / attach`——依赖 tmux，只在 `local` 模式之外用到
-- `exp gpu` 的 `nvidia-smi` 输出解析——按标准 csv 格式写的，没在真卡上试过
-- tensorboard 事件文件读取——需要装了 `tensorboard` 才能走到，本地没测
-- 奖励服务的 curl 探测
-- `exp report` 的判据解析只在 demo 那种写法（「比 baseline 低 0.02」）上试过。别的写法认不出指标或数值时会退化成标注带，不会画错线，但也没在更多写法上验证
-- 报告的浏览器渲染只在 Chrome 上看过一眼（含 `prefers-color-scheme` 暗色）；没在 Firefox / Safari 上核过
-
-这些地方如果不对，改起来都是几行的事，但请先拿一台机器试一下再用。
+Rendering happens locally (it reads and writes local files), which is why the config has an extra `LOCAL_PYTHON` entry (empty falls back to `REMOTE_PYTHON`).
 
 ---
 
-## 跑测试
+## What's verified, and what isn't
+
+This tool was rewritten from a working setup rather than extracted from a product, so the boundary is worth stating plainly.
+
+**Exercised locally, with test coverage:**
+
+- All of `progress/generic.py` — source priority, junk-data skipping, log-text parsing, segmentation, metric selection, and the `select_metrics` / `dump_json` paths that `exp report` reuses. 52 assertions, `python3 tests/test_generic.py`
+- `exp list / status / config / plan / errors / report / help` end to end in `local` mode; reading and generating the pre-registration (including both full-width and ASCII colons); report generation (file written, each metric name and the `PLAN.md` criterion text present, criterion drawn as a reference line, defaulting to the current directory, no external URL anywhere); and the error paths (unknown command, unknown run, missing registry). 39 assertions, `bash tests/test_exp.sh`
+
+**Not verified (no cluster to test against):**
+
+- The ssh path (`run_on`'s remote branch, including `exp report` fetching the series remotely). The logic mirrors the local branch, but it has never been run for real.
+- `exp start / stop / attach` — they depend on tmux and are only reached outside `local` mode.
+- `exp gpu`'s `nvidia-smi` output parsing — written against the standard CSV format, never tried on a real GPU.
+- Reading tensorboard event files — requires `tensorboard` to be installed to reach that path; not tested locally.
+- The reward-service curl probe.
+- `exp report`'s criterion parsing has only been tried on phrasings like the demo's ("at least 0.02 lower than the baseline"). Other phrasings that don't yield a recognizable metric or value degrade to an annotation band rather than drawing a wrong line — but they haven't been exercised either.
+- The report has only been glanced at in Chrome (including `prefers-color-scheme` dark). Not checked in Firefox or Safari.
+
+If any of these are wrong, the fix is a few lines — but try them on one machine first.
+
+---
+
+## Running the tests
 
 ```bash
-python3 tests/test_generic.py    # 进度读取器
-bash    tests/test_exp.sh        # exp 命令本身（只用 local 模式）
+python3 tests/test_generic.py    # the progress reader
+bash    tests/test_exp.sh        # the exp command itself (local mode only)
 ```
 
-Windows 上 `python3` 常常是 Microsoft Store 的占位程序（跑起来直接退出），直接用 `py` 代替即可：
+On Windows, `python3` is often the Microsoft Store stub (it exits without doing anything). Use `py` instead:
 
 ```bash
 py -X utf8 tests/test_generic.py
-bash    tests/test_exp.sh        # 这个会自己探测解释器，不用管
+bash    tests/test_exp.sh        # this one detects the interpreter itself; nothing to configure
 ```

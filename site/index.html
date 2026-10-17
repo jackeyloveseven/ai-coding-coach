@@ -1,25 +1,26 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ai-coding-coach</title>
-<meta name="description" content="面向初级 / 中级算法工程师的 Claude Code 插件：一边帮你写代码，一边把你教成能一眼看出 AI 哪里写错了的人。">
+<meta name="description" content="A Claude Code plugin for early- and mid-career ML engineers: it writes code with you and turns you into someone who can see at a glance where the AI got it wrong.">
 <meta property="og:title" content="ai-coding-coach">
-<meta property="og:description" content="一边帮你写代码，一边把你教成能一眼看出 AI 哪里写错了的算法工程师。">
+<meta property="og:description" content="Writes code with you, and turns you into an engineer who can see at a glance where the AI got it wrong.">
 <meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <style>
 /* ---------------------------------------------------------------------------
-   ai-coding-coach 落地页
-   布局：单栏正文（约 66 字宽）+ 全宽图，左侧对齐的编辑部式排布，
-        顶部一条窄导航。视觉母题取自这个仓库自己的世界：训练曲线、三档分诊、
-        终端回显。三个档位的绿/黄/红是语义色，不参与主题强调色。
+   ai-coding-coach landing page
+   Layout: a single editorial column (~66ch) with full-bleed figures, left
+   aligned, under a narrow top nav. The visual motif comes from the repo's own
+   world: training curves, three-tier triage, terminal echo. The green / amber /
+   red of the tiers are semantic colours and never serve as the accent.
 --------------------------------------------------------------------------- */
 :root{
-  /* --- 颜色 --- */
+  /* --- colour --- */
   --bg:#f4f6f7;
   --bg-grid:rgba(15,23,32,.045);
   --surface:#ffffff;
@@ -47,11 +48,11 @@
 
   --shadow:0 1px 2px rgba(15,23,32,.05), 0 8px 24px -14px rgba(15,23,32,.28);
 
-  /* --- 字体 --- */
-  --sans:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Hiragino Sans GB', 'Source Han Sans SC', sans-serif;
+  /* --- type --- */
+  --sans:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
-  /* --- 尺度 --- */
+  /* --- scale --- */
   --col:44rem;
   --gutter:20px;
   --r-sm:5px;
@@ -132,7 +133,7 @@ body{
   -webkit-font-smoothing:antialiased;
   padding:0 var(--gutter);
 }
-/* 工程坐标纸：极淡的一层网格，只在背景里 */
+/* Engineer's graph paper: a very faint grid, background only */
 body::before{
   content:"";
   position:fixed;
@@ -172,7 +173,7 @@ code{font-family:var(--mono); font-size:.88em}
 .dim{color:var(--muted)}
 .small{font-size:.85rem}
 
-/* ---------- 顶部导航 ---------- */
+/* ---------- top nav ---------- */
 .top{
   position:sticky; top:0; z-index:5;
   margin:0 calc(var(--gutter) * -1);
@@ -202,7 +203,7 @@ code{font-family:var(--mono); font-size:.88em}
 @media (min-width:641px){ #theme-toggle{margin-left:0} }
 #theme-toggle:hover{color:var(--accent); border-color:var(--accent)}
 
-/* ---------- 段落骨架 ---------- */
+/* ---------- section skeleton ---------- */
 section{padding-block:clamp(2.6rem, 1.6rem + 3.2vw, 4.2rem)}
 section + section{border-top:1px solid var(--line-soft)}
 .stack{display:flex; flex-direction:column; gap:1.1rem}
@@ -242,7 +243,7 @@ section + section{border-top:1px solid var(--line-soft)}
 #copy-install:hover{background:rgba(255,255,255,.14)}
 .install-note{margin-top:.55rem; font-size:.82rem; color:var(--muted)}
 
-/* ---------- 图 ---------- */
+/* ---------- figures ---------- */
 figure{margin:0}
 .chart{margin-top:2.4rem; overflow-x:auto}
 .chart svg{display:block; width:100%; min-width:460px; height:auto}
@@ -251,7 +252,7 @@ figure{margin:0}
 .legend i{width:15px; height:2.5px; border-radius:2px; display:inline-block}
 figcaption{margin-top:.7rem; font-size:.83rem; color:var(--muted); max-width:40em}
 
-/* ---------- 三档 ---------- */
+/* ---------- tiers ---------- */
 .tiers{display:flex; flex-direction:column; gap:1px; background:var(--line-soft); border:1px solid var(--line-soft); border-radius:var(--r-md); overflow:hidden; margin-top:1.6rem}
 .tier{background:var(--surface); padding:18px 20px; display:grid; grid-template-columns:minmax(7.5rem, 9.5rem) 1fr; gap:4px 22px}
 .tier .name{display:flex; align-items:baseline; gap:9px; font-weight:600}
@@ -266,7 +267,7 @@ figcaption{margin-top:.7rem; font-size:.83rem; color:var(--muted); max-width:40e
   .tier .how{grid-column:1}
 }
 
-/* ---------- 终端块 ---------- */
+/* ---------- terminal blocks ---------- */
 .term{
   background:var(--term-bg);
   color:var(--term-fg);
@@ -288,9 +289,10 @@ figcaption{margin-top:.7rem; font-size:.83rem; color:var(--muted); max-width:40e
 .term .s{color:var(--term-str)}
 .term .d{color:var(--term-dim)}
 
-/* minmax(0,1fr) 而不是 1fr：1fr 的最小尺寸是 auto，也就是内容的 min-content。
-   终端块里的 <pre> 不换行，min-content 就是最长那一行，栅格会被撑到比屏幕还宽。
-   同理，栅格子项也要 min-width:0，里面的 <pre> 才会去滚动而不是把页面顶宽。 */
+/* minmax(0,1fr) rather than 1fr: 1fr's minimum is auto, i.e. the content's
+   min-content. The <pre> inside a terminal block doesn't wrap, so min-content
+   is its longest line and the grid blows out past the screen. Same reason grid
+   children need min-width:0 — so the <pre> scrolls instead of widening the page. */
 .examples{display:grid; grid-template-columns:minmax(0,1fr); gap:1.4rem; margin-top:1.6rem}
 .examples > *{min-width:0}
 @media (min-width:900px){ .examples{grid-template-columns:repeat(2, minmax(0,1fr))} }
@@ -302,7 +304,7 @@ figcaption{margin-top:.7rem; font-size:.83rem; color:var(--muted); max-width:40e
 .checklist li::marker{color:var(--muted)}
 .checklist b{color:var(--fg)}
 
-/* ---------- 失败模式 ---------- */
+/* ---------- failure modes ---------- */
 .failures{display:grid; gap:1px; background:var(--line-soft); border:1px solid var(--line-soft); border-radius:var(--r-md); overflow:hidden; margin-top:1.6rem}
 @media (min-width:820px){ .failures{grid-template-columns:1fr 1fr} }
 .failure{background:var(--surface); padding:20px 22px; display:flex; flex-direction:column; gap:.5rem}
@@ -312,7 +314,7 @@ figcaption{margin-top:.7rem; font-size:.83rem; color:var(--muted); max-width:40e
 .failure .fix{font-size:.88rem; color:var(--muted); border-top:1px dashed var(--line); padding-top:.6rem; margin-top:auto}
 .failure .fix b{color:var(--fg); font-weight:600}
 
-/* ---------- 表格 ---------- */
+/* ---------- tables ---------- */
 .scroll-x{overflow-x:auto; margin-top:1.4rem}
 table{border-collapse:collapse; width:100%; min-width:30rem; font-size:.9rem}
 th,td{text-align:left; padding:11px 14px; border-bottom:1px solid var(--line-soft); vertical-align:top}
@@ -320,8 +322,10 @@ th{font-size:.75rem; font-family:var(--mono); letter-spacing:.06em; text-transfo
 tbody tr:last-child td{border-bottom:0}
 td code{background:var(--surface-2); padding:1px 6px; border-radius:4px; white-space:nowrap}
 .num-col{font-variant-numeric:tabular-nums; white-space:nowrap}
+.yes{color:var(--tier-green); font-weight:600}
+.no{color:var(--muted)}
 
-/* ---------- 拉引言 ---------- */
+/* ---------- pull quote ---------- */
 .pull{
   margin-top:2.4rem;
   border-left:2px solid var(--accent);
@@ -331,7 +335,7 @@ td code{background:var(--surface-2); padding:1px 6px; border-radius:4px; white-s
 }
 .pull b{color:var(--accent-ink)}
 
-/* ---------- 页脚 ---------- */
+/* ---------- footer ---------- */
 footer{border-top:1px solid var(--line); padding-block:2.4rem 3rem; font-size:.87rem; color:var(--muted)}
 .foot-row{display:flex; flex-wrap:wrap; gap:.6rem 1.6rem; align-items:baseline}
 .foot-note{margin-top:1rem; max-width:44em}
@@ -347,13 +351,14 @@ footer{border-top:1px solid var(--line); padding-block:2.4rem 3rem; font-size:.8
   <div class="top-in">
     <a class="brand" href="#top">ai-coding-coach</a>
     <nav>
-      <a href="#tiers">三档</a>
-      <a href="#look">它长什么样</a>
-      <a href="#why">为什么</a>
+      <a href="#tiers">Tiers</a>
+      <a href="#look">Examples</a>
+      <a href="#why">Why</a>
       <a href="#exptool">exptool</a>
-      <a href="#install">安装</a>
+      <a href="#editions">Editions</a>
+      <a href="#install">Install</a>
     </nav>
-    <button id="theme-toggle" type="button" aria-label="切换深浅色">跟随系统</button>
+    <button id="theme-toggle" type="button" aria-label="Switch colour scheme">System</button>
   </div>
 </header>
 
@@ -362,16 +367,16 @@ footer{border-top:1px solid var(--line); padding-block:2.4rem 3rem; font-size:.8
 <!-- ============ hero ============ -->
 <section class="hero">
   <div class="wrap stack">
-    <p class="eyebrow">Claude Code 插件 · MIT</p>
-    <h1>一边帮你写代码，一边把你教成<br>能一眼看出 AI 哪里写错了的算法工程师</h1>
-    <p class="lede">面向初级 / 中级算法工程师。<span class="tagline">不追求写得比 AI 快，追求审得动 AI。</span></p>
+    <p class="eyebrow">Claude Code plugin · MIT</p>
+    <h1>Writes code with you, and turns you into<br>an engineer who can see where the AI got it wrong</h1>
+    <p class="lede">For early- and mid-career ML engineers. <span class="tagline">The goal isn't to type faster than the AI. It's to be able to review it.</span></p>
 
     <div class="install">
       <div class="install-row">
         <code id="install-cmd"><span class="prompt">$ </span>/plugin install ai-coding-coach --marketplace jackeyloveseven/ai-coding-coach</code>
-        <button id="copy-install" type="button" data-copy="install-cmd">复制</button>
+        <button id="copy-install" type="button" data-copy="install-cmd">Copy</button>
       </div>
-      <p class="install-note">在 Claude Code 会话里直接跑。装好后新开一个会话即可，无需其他配置。</p>
+      <p class="install-note">Run it straight from a Claude Code session. Open a new session afterwards — no other configuration.</p>
     </div>
   </div>
 
@@ -379,13 +384,13 @@ footer{border-top:1px solid var(--line); padding-block:2.4rem 3rem; font-size:.8
     <div class="legend">
       <span><i style="background:var(--muted)"></i>train_loss</span>
       <span><i style="background:var(--accent)"></i>val_loss</span>
-      <span><i style="background:var(--tier-amber)"></i>事前定下的判据</span>
+      <span><i style="background:var(--tier-amber)"></i>criterion, set in advance</span>
     </div>
     <svg viewBox="0 0 720 250" role="img" aria-labelledby="chart-title chart-desc">
-      <title id="chart-title">一次 SFT 的 train_loss 与 val_loss 曲线</title>
-      <desc id="chart-desc">train_loss 从 2.30 一路降到 0.62；val_loss 在约 4000 步触底 0.89 后掉头回升到 0.99，只在 4000 到 5000 步之间擦到过事前定下的判据线 0.90。</desc>
+      <title id="chart-title">train_loss and val_loss curves from one SFT run</title>
+      <desc id="chart-desc">train_loss falls from 2.30 to 0.62. val_loss bottoms out near 0.89 at about step 4000, then turns back up to 0.99, only grazing the pre-registered criterion line of 0.90 between steps 4000 and 5000.</desc>
 
-      <!-- 网格 -->
+      <!-- grid -->
       <g stroke="var(--line-soft)" stroke-width="1">
         <line x1="56" y1="20.0" x2="700" y2="20.0"/>
         <line x1="56" y1="65.2" x2="700" y2="65.2"/>
@@ -394,13 +399,13 @@ footer{border-top:1px solid var(--line); padding-block:2.4rem 3rem; font-size:.8
         <line x1="56" y1="200.9" x2="700" y2="200.9"/>
       </g>
 
-      <!-- 坐标轴 -->
+      <!-- axes -->
       <g stroke="var(--line)" stroke-width="1">
         <line x1="56" y1="20" x2="56" y2="210"/>
         <line x1="56" y1="210" x2="700" y2="210"/>
       </g>
 
-      <!-- y 轴刻度 -->
+      <!-- y ticks -->
       <g fill="var(--muted)" font-family="var(--mono)" font-size="16" text-anchor="end">
         <text x="47" y="26">2.5</text>
         <text x="47" y="71">2.0</text>
@@ -408,7 +413,7 @@ footer{border-top:1px solid var(--line); padding-block:2.4rem 3rem; font-size:.8
         <text x="47" y="161">1.0</text>
         <text x="47" y="206">0.5</text>
       </g>
-      <!-- x 轴刻度 -->
+      <!-- x ticks -->
       <g fill="var(--muted)" font-family="var(--mono)" font-size="16" text-anchor="middle">
         <text x="56" y="231">0</text>
         <text x="217" y="231">2000</text>
@@ -417,9 +422,9 @@ footer{border-top:1px solid var(--line); padding-block:2.4rem 3rem; font-size:.8
         <text x="700" y="231">8000</text>
       </g>
 
-      <!-- 判据线 -->
+      <!-- criterion line -->
       <line x1="56" y1="164.8" x2="700" y2="164.8" stroke="var(--tier-amber)" stroke-width="2" stroke-dasharray="7 5"/>
-      <text x="62" y="158" fill="var(--tier-amber)" font-family="var(--mono)" font-size="16">判据 val_loss &lt; 0.90</text>
+      <text x="62" y="158" fill="var(--tier-amber)" font-family="var(--mono)" font-size="16">criterion: val_loss &lt; 0.90</text>
 
       <!-- train_loss -->
       <polyline fill="none" stroke="var(--muted)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"
@@ -427,223 +432,254 @@ footer{border-top:1px solid var(--line); padding-block:2.4rem 3rem; font-size:.8
       <!-- val_loss -->
       <polyline fill="none" stroke="var(--accent)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"
         points="56,32.7 136.5,92.4 217,130.4 297.5,153.9 378,163.9 458.5,165.7 539,163.0 619.5,159.3 700,156.6"/>
-      <!-- val 最低点 -->
+      <!-- val minimum -->
       <circle cx="458.5" cy="165.7" r="5" fill="var(--accent)" stroke="var(--bg)" stroke-width="2.5"/>
 
-      <!-- 标注 -->
+      <!-- annotation -->
       <line x1="500" y1="80" x2="500" y2="157" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3"/>
-      <text x="440" y="50" fill="var(--fg)" font-family="var(--sans)" font-size="16">val 在 4000 步后掉头</text>
-      <text x="440" y="70" fill="var(--muted)" font-family="var(--sans)" font-size="16">后面只是在记住训练集</text>
+      <text x="440" y="50" fill="var(--fg)" font-family="var(--sans)" font-size="16">val turns back up after 4000</text>
+      <text x="440" y="70" fill="var(--muted)" font-family="var(--sans)" font-size="16">after that it's just memorizing train</text>
     </svg>
-    <figcaption>这不是「过拟合了，早点停」这么简单——<strong>跑之前你写下的判据是 val_loss &lt; 0.90，而这条线整段只被擦到过一次。</strong>结果出来之后再去定「涨多少算有效」，几乎总会得出「有效」。判据要事前写。</figcaption>
+    <figcaption>This isn't simply "it overfit, stop earlier" — <strong>the criterion you wrote before the run was val_loss &lt; 0.90, and the curve only grazed that line once.</strong> Deciding "how much counts as improvement" after the result is in will almost always produce "it improved". Write the criterion first.</figcaption>
   </figure>
 </section>
 
-<!-- ============ 三档 ============ -->
+<!-- ============ tiers ============ -->
 <section id="tiers">
   <div class="wrap">
-    <p class="eyebrow">分档</p>
-    <h2>每次任务先分档：用两个问题决定该教多少</h2>
-    <p class="lede" style="margin-top:.7rem">出错时后果有多隐蔽？亲手做一遍对判断力的价值有多大？拿不准时按黄档处理——宁可少教，也不在该打断的地方打断。</p>
+    <p class="eyebrow">Tiering</p>
+    <h2>Every task gets tiered first: two questions decide how much to teach</h2>
+    <p class="lede" style="margin-top:.7rem">How quietly does this fail if it's wrong? How much does doing it by hand build judgment? When unsure, it tiers yellow — better to under-teach than to interrupt somewhere it shouldn't.</p>
 
     <div class="tiers">
       <div class="tier t-green">
-        <div class="name"><span class="dot"></span>绿：放手</div>
-        <div class="tasks">样板代码、argparse、日志、画图、shell 命令</div>
-        <div class="how">直接做好，<strong>不加教学</strong>。学 API 语法、调 matplotlib 样式不增值，说教只会烦人。</div>
+        <div class="name"><span class="dot"></span>Green: let go</div>
+        <div class="tasks">boilerplate, argparse, logging, plotting, shell commands</div>
+        <div class="how">Done well, <strong>no teaching</strong>. Learning API syntax or fighting matplotlib styling adds nothing; unsolicited lessons are just annoying.</div>
       </div>
       <div class="tier t-amber">
-        <div class="name"><span class="dot"></span>黄：读懂</div>
-        <div class="tasks">数据处理、训练循环、loss 实现、评估代码、超参改动</div>
-        <div class="how">做完，附一个 6 行以内的<strong>「读懂检查点」</strong>：关键行为什么这么写、这段最可能悄悄错在哪、你能直接跑的验证方式。</div>
+        <div class="name"><span class="dot"></span>Amber: read it</div>
+        <div class="tasks">data pipelines, training loops, loss implementations, eval code, hyperparameter changes</div>
+        <div class="how">Done, plus a <strong>Read-it checkpoint</strong> of six lines or fewer: what the key lines do, where this is most likely to be silently wrong, and a check you can run yourself.</div>
       </div>
       <div class="tier t-red">
-        <div class="name"><span class="dot"></span>红：亲手</div>
-        <div class="tasks">attention / loss / 采样 / 优化器、方案设计、实验设计、读数、决定下一步</div>
-        <div class="how">进入教练模式：先给脚手架，请你出手，再对照差异。决定权始终在你。</div>
+        <div class="name"><span class="dot"></span>Red: by hand</div>
+        <div class="tasks">attention / loss / sampling / optimizers, design decisions, experiment design, reading a run, deciding next steps</div>
+        <div class="how">Coach mode: scaffolding first, then you go, then we compare the differences. The decision stays yours throughout.</div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ 它长什么样 ============ -->
+<!-- ============ examples ============ -->
 <section id="look">
   <div class="wrap">
-    <p class="eyebrow">示例</p>
-    <h2>它长什么样</h2>
-    <p class="lede" style="margin-top:.7rem">下面是两段真实输出。左边是黄档的检查点，右边是红档的脚手架。</p>
+    <p class="eyebrow">Examples</p>
+    <h2>What it looks like</h2>
+    <p class="lede" style="margin-top:.7rem">Two pieces of real output. On the left, an amber-tier checkpoint. On the right, red-tier scaffolding.</p>
   </div>
 
   <div class="wide examples">
     <div>
-      <div class="ex-head amber"><span class="dot"></span>黄档 · 你贴一段评估代码给我看</div>
+      <div class="ex-head amber"><span class="dot"></span>Amber · you paste an eval script for review</div>
       <div class="term">
-        <div class="term-head">读懂检查点 <b>6 行以内</b></div>
-        <pre><span class="c">-</span> <span class="k">关键行</span>：<span class="s">model.eval()</span> 和 <span class="s">torch.no_grad()</span> 缺一不可。
-  少了 <span class="s">eval()</span>，dropout 和 BatchNorm 还留在训练态，
-  指标会又抖又偏低 —— 而且<span class="k">不报错</span>。
-<span class="c">-</span> <span class="k">静默风险</span>：<span class="s">total += batch_loss</span> 没乘 batch size，
-  最后除以 <span class="s">len(loader)</span> 得到的是「每 batch 平均」。
-  最后一批样本不满时它会偏。
-  验证：跟「总 loss / 总样本数」对一下。
-<span class="c">-</span> <span class="k">先预测</span>：这段跑完，val_loss 和训练最后几个
-  step 的 train_loss 差多少？
-<span class="c">-</span> <span class="k">自测</span>：把 <span class="s">model.eval()</span> 删掉，指标会变好还是
-  变差？为什么？</pre>
+        <div class="term-head">Read-it checkpoint <b>six lines or fewer</b></div>
+        <pre><span class="c">-</span> <span class="k">Key lines</span>: <span class="s">model.eval()</span> and <span class="s">torch.no_grad()</span> are both
+  required. Drop <span class="s">eval()</span> and dropout and BatchNorm stay in
+  training mode, so the metric is noisy and reads low —
+  and <span class="k">nothing errors</span>.
+<span class="c">-</span> <span class="k">Silent risk</span>: <span class="s">total += batch_loss</span> never multiplies by
+  batch size, so dividing by <span class="s">len(loader)</span> gives a
+  per-batch average. It skews when the last batch is
+  short. Verify: compare against total loss / total samples.
+<span class="c">-</span> <span class="k">Predict first</span>: when this finishes, how far apart
+  will val_loss and the last few steps of train_loss be?
+<span class="c">-</span> <span class="k">Self-check</span>: delete <span class="s">model.eval()</span>. Does the metric get
+  better or worse? Why?</pre>
       </div>
     </div>
 
     <div>
-      <div class="ex-head red"><span class="dot"></span>红档 · 你要自己实现 DPO loss</div>
+      <div class="ex-head red"><span class="dot"></span>Red · you implement the DPO loss yourself</div>
       <div class="term">
-        <div class="term-head">不给答案，给脚手架</div>
-        <pre><span class="d">你写一版，我们再对照：</span>
+        <div class="term-head">No answer — scaffolding</div>
+        <pre><span class="d">Write a version, then we'll compare:</span>
 
 <span class="k">def</span> dpo_loss(policy_logps, ref_logps,
              chosen, rejected, beta=<span class="s">0.1</span>):
-    <span class="s">"""返回 (loss, chosen_rewards, rejected_rewards)。
-    写完和官方实现比 torch.allclose。"""</span>
+    <span class="s">"""Returns (loss, chosen_rewards, rejected_rewards).
+    When you're done, check against the official
+    implementation with torch.allclose."""</span>
 
-<span class="d">一个提示：`beta` 在这份实现里应该出现</span>
-<span class="d">**两次**，想清楚分别为什么。</span>
+<span class="d">One hint: `beta` should appear **twice** in this
+implementation. Work out why each time.</span>
 
-<span class="c">想直接要答案？回一句「直接给」，立刻给，不追问。</span></pre>
+<span class="c">Want the answer directly? Say "just give it" and
+you get it immediately, no follow-up questions.</span></pre>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ 为什么 ============ -->
+<!-- ============ why ============ -->
 <section id="why">
   <div class="wrap">
-    <p class="eyebrow">动机</p>
-    <h2>四个失败模式</h2>
-    <p class="lede" style="margin-top:.7rem">写代码在快速贬值，「判断」没有。下面四条是初级算法工程师在 AI 时代最常摔的坑——这个仓库里的每一样东西，都对着其中一条。</p>
+    <p class="eyebrow">Motivation</p>
+    <h2>Four failure modes</h2>
+    <p class="lede" style="margin-top:.7rem">Writing code is depreciating fast. Judgment isn't. These are the four ways early-career ML engineers trip in the AI era — and everything in this repo points at one of them.</p>
 
     <div class="failures">
       <div class="failure">
         <div class="num">#1</div>
-        <h3>能跑通，但结果悄悄是错的</h3>
-        <p>最贵的 bug 不是报错，是能跑、指标也出来了、但其实错了。训练集和验证集顺序反了、指标算在了增强后的数据上、loss 累加时样本数没除对——这些都不崩，只会让你在错误的结论上再走三个月。</p>
-        <p class="fix"><b>解法</b>：黄档的「静默风险」专门盯这个，附一段你能直接跑的验证方式。</p>
+        <h3>It runs, but the result is quietly wrong</h3>
+        <p>The most expensive bug isn't the one that throws. It's the one that runs, prints a metric, and is wrong. Train and eval reversed, the metric computed on augmented data, the loss accumulated without dividing by the right sample count — nothing crashes, it just sends you three months down a wrong conclusion.</p>
+        <p class="fix"><b>The fix</b>: the amber-tier <b>silent risk</b> is aimed at exactly this, with a check you can run yourself.</p>
       </div>
       <div class="failure">
         <div class="num">#2</div>
-        <h3>loss 降了，但不知道那是不是真的学到东西</h3>
-        <p>loss 一路降、指标涨了 3 个点——是改动有效，还是数据泄露、随机波动、reward hacking？结果出来之后再决定「涨多少算有效」，几乎总会得出「有效」的结论。</p>
-        <p class="fix"><b>解法</b>：事前记录（假设 / 对照 / 变量 / <b>判据</b> / 止损 / 预测）跑之前写完，读数时判据就摆在指标正上方。</p>
+        <h3>The loss went down, but you don't know if it learned anything</h3>
+        <p>The loss drops, the metric gains three points — is that the change working, or data leakage, or noise, or reward hacking? Deciding "how much counts as improvement" after seeing the result will almost always produce "it improved".</p>
+        <p class="fix"><b>The fix</b>: write the pre-registration (hypothesis / control / variable / <b>criterion</b> / stop-loss / prediction) before the run, and the criterion sits directly above the metric when you read it.</p>
       </div>
       <div class="failure">
         <div class="num">#3</div>
-        <h3>实验跑完了，下一步全靠感觉</h3>
-        <p>继续还是停、换哪个参数、要不要加卡——这些决定没人替你做。AI 也不知道你的业务和数据，给不出可靠建议。</p>
-        <p class="fix"><b>解法</b>：红档不给答案，给脚手架，请你先说出「我打算下一步做什么、为什么」，再对照。</p>
+        <h3>The run finished and the next step is pure vibes</h3>
+        <p>Continue or stop, which parameter to change, whether to add GPUs — nobody makes these calls for you. The AI doesn't know your business or your data either, so it can't give you a reliable answer.</p>
+        <p class="fix"><b>The fix</b>: the red tier withholds the answer and supplies scaffolding. You say what you intend to do next and why, then we compare.</p>
       </div>
       <div class="failure">
         <div class="num">#4</div>
-        <h3>我越来越不做「判断」这个动作了</h3>
-        <p>代码几乎都由 agent 写，你审得越来越少。判断力不是被 AI 拿走的，是你不再练习而退化的——它不会因为 AI 变强而消失，反而因为 AI 产出变多而更值钱。</p>
-        <p class="fix"><b>解法</b>：掌握度台账按 1 / 3 / 7 / 16 / 35 天间隔复习，稳了的降一档、反复出错的升一档。想主动练就敲 <code>/coach-drill</code>。</p>
+        <h3>I've stopped doing the "judging" part</h3>
+        <p>The agent writes nearly all the code and you review less and less. Judgment isn't taken from you by AI — it atrophies from disuse. And it doesn't lose value as AI gets better; it gains value as AI produces more.</p>
+        <p class="fix"><b>The fix</b>: a mastery ledger schedules reviews on a 1 / 3 / 7 / 16 / 35 day spacing, dropping a tier for topics that stabilized and raising one for topics you keep fumbling. To practice on purpose, run <code>/coach-drill</code>.</p>
       </div>
     </div>
 
-    <p class="pull">贯穿全篇的一条判断：<b>分工的边界不在「谁写代码」，而在「谁对结果负责」。</b></p>
+    <p class="pull">One line runs through all of it: <b>the division of labor is not about who writes the code, it is about who is accountable for the result.</b></p>
   </div>
 </section>
 
-<!-- ============ 两个 skill ============ -->
+<!-- ============ two skills ============ -->
 <section id="skills">
   <div class="wrap">
-    <p class="eyebrow">常驻成本</p>
-    <h2>两个 skill，按「谁能触发」分工</h2>
-    <p class="lede" style="margin-top:.7rem">装两个 skill，但真正的内容只在你用到时才加载。数字是 <code>claude plugin details</code> 自己算的。</p>
+    <p class="eyebrow">Resident cost</p>
+    <h2>Two skills, split by who can trigger them</h2>
+    <p class="lede" style="margin-top:.7rem">Both install, but the substance only loads when the situation calls for it. Run <code>claude plugin details</code> to see the exact numbers for your version.</p>
 
     <div class="scroll-x">
       <table>
         <thead>
-          <tr><th>skill</th><th>触发方式</th><th>干什么</th><th class="num-col">常驻成本</th></tr>
+          <tr><th>skill</th><th>Trigger</th><th>What it does</th><th class="num-col">Resident</th></tr>
         </thead>
         <tbody>
           <tr>
             <td><code>ai-coding-coach</code></td>
-            <td>自动（model-invoked）</td>
-            <td>常驻纪律。你写代码、调 bug、看日志时自动生效，顺手把你拉进判断。</td>
-            <td class="num-col">~240 token</td>
+            <td>Automatic (model-invoked)</td>
+            <td>Standing discipline. Active when you write code, debug, or read a log, pulling you into the judgment.</td>
+            <td class="num-col">description only</td>
           </tr>
           <tr>
             <td><code>/coach-drill</code></td>
-            <td>只有你手打（user-invoked）</td>
-            <td>显式编排。想主动练 15–25 分钟时敲它，从台账挑到期的主题带你练。</td>
-            <td class="num-col">~70 token</td>
+            <td>You type it (user-invoked)</td>
+            <td>Explicit orchestration. Run it for a 15–25 minute session; it picks due topics from the ledger and drills them.</td>
+            <td class="num-col">description only</td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <p class="small dim" style="margin-top:1rem">两个加起来，每次会话只多占 <strong>约 310 token</strong>。真正的内容（3.5k / 1.1k）只在你用到时才加载，所以常驻不构成上下文负担——一条 CLAUDE.md 规则、一个 MCP server 的描述，往往比这还贵。那 70 token 是 <code>/coach-drill</code> 的描述：<code>disable-model-invocation</code> 只关掉了自动触发，描述仍留在技能列表里，好让你知道有这扇门。</p>
+    <p class="small dim" style="margin-top:1rem">Only the two descriptions are resident. The substance — <code>SKILL.md</code> and the <code>references/</code> files — loads on demand. So the standing cost is a couple of short descriptions, which is less than a typical <code>CLAUDE.md</code> rule or the description of one MCP server. <code>/coach-drill</code>'s description stays in the skill list on purpose: <code>disable-model-invocation</code> turns off automatic triggering, not the description, so you still know the door is there.</p>
   </div>
 </section>
 
 <!-- ============ exptool ============ -->
 <section id="exptool">
   <div class="wrap">
-    <p class="eyebrow">配套工具</p>
-    <h2>exptool：把事前记录接到训练日志上</h2>
-    <p class="lede" style="margin-top:.7rem">光有一条纪律没用，得让它在正确的时刻出现在你眼前。<code>exp</code> 读实验目录下的 <code>PLAN.md</code>，把<strong>判据</strong>印在指标正上方。</p>
+    <p class="eyebrow">Companion tooling</p>
+    <h2>exptool: wiring the pre-registration into the training log</h2>
+    <p class="lede" style="margin-top:.7rem">A discipline on its own does nothing. It has to show up in front of you at the right moment. <code>exp</code> reads the <code>PLAN.md</code> in the run directory and prints the <strong>criterion</strong> directly above the metrics.</p>
 
     <div class="term" style="margin-top:1.6rem">
       <div class="term-head">$ <b>exp status demo-sft</b></div>
-      <pre><span class="d">实验: demo-sft
-机器: local
-目录: ./examples/demo-sft
-方法: sft</span>
+      <pre><span class="d">run:     demo-sft
+machine: local
+dir:     ./examples/demo-sft
+method:  sft</span>
 
-<span class="d">健康检查</span>
-  tmux train-demo: 在
-  日志最后更新: 2 分钟前（train.log）
+<span class="d">health</span>
+  tmux train-demo: up
+  log last updated: 2 minutes ago (train.log)
 
-<span class="d">事前记录</span>
-  <span class="k">判据</span>: 用固定 dev 集上的 eval loss 判断，比 baseline 低 0.02 以上才算有效
-  <span class="k">预测</span>: 我觉得 eval loss 会低 0.01~0.03，把握中
-  <span class="d">（全文: exp plan demo-sft）</span>
+<span class="d">pre-registration</span>
+  <span class="k">criterion</span>: judge by eval loss on the fixed dev set; must beat baseline by more than 0.02
+  <span class="k">prediction</span>: I expect eval loss 0.01-0.03 lower, confidence medium
+  <span class="d">(full text: exp plan demo-sft)</span>
 
-<span class="d">进度</span>
+<span class="d">progress</span>
   step  <span class="s">4200</span>/8000    loss <span class="s">0.84</span>    eval loss <span class="s">0.91</span>
-  <span class="c">读数看趋势，不看单步</span></pre>
+  <span class="c">read the trend, not the step</span></pre>
     </div>
 
     <div class="scroll-x">
       <table>
-        <thead><tr><th>命令</th><th>干什么</th></tr></thead>
+        <thead><tr><th>Command</th><th>What it does</th></tr></thead>
         <tbody>
-          <tr><td><code>exp list</code></td><td>登记了哪些实验，哪些还在跑</td></tr>
-          <tr><td><code>exp status</code></td><td>进度、指标趋势、健康检查，外加事前记录的判据</td></tr>
-          <tr><td><code>exp plan</code></td><td>没有 <code>PLAN.md</code> 就按六项生成模板，有就打印全文</td></tr>
-          <tr><td><code>exp report</code></td><td>生成一份自包含的 HTML 报告：曲线 + 判据参考线 + 健康检查</td></tr>
+          <tr><td><code>exp list</code></td><td>Which runs are registered, and which are still going</td></tr>
+          <tr><td><code>exp status</code></td><td>Progress, metric trend, health checks, plus the pre-registered criterion</td></tr>
+          <tr><td><code>exp plan</code></td><td>Generates the six-item template when there's no <code>PLAN.md</code>; prints the full text when there is</td></tr>
+          <tr><td><code>exp report</code></td><td>Renders a self-contained HTML report: curves, criterion reference line, health checks</td></tr>
         </tbody>
       </table>
     </div>
 
-    <p class="small dim" style="margin-top:1rem">每条命令执行前都会打印它背后真正跑的命令（灰色的 <code>+ ssh ...</code>）。复制下来自己改着用，熟了以后不用这个工具也能干。它是脱敏的通用版：主机名、共享盘路径、奖励服务地址全部走配置文件，本地就能试，不需要集群。</p>
+    <p class="small dim" style="margin-top:1rem">Every command prints the command it actually runs first (the grey <code>+ ssh ...</code>). Copy it, modify it, use it directly — once you're comfortable you don't need the tool. It's a sanitized, generic build: hostnames, shared-disk paths and reward-service addresses all come from a config file, so it runs locally with no cluster.</p>
   </div>
 </section>
 
-<!-- ============ 安装 ============ -->
+<!-- ============ editions ============ -->
+<section id="editions">
+  <div class="wrap">
+    <p class="eyebrow">Editions</p>
+    <h2>Community is complete. Pro adds the tooling.</h2>
+    <p class="lede" style="margin-top:.7rem">Community is not a crippled demo — it's the whole coaching skill, free and MIT. Pro is for people who want the tooling that makes the discipline stick.</p>
+
+    <div class="scroll-x">
+      <table>
+        <thead>
+          <tr><th></th><th>Community</th><th>Pro</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>License</td><td>MIT</td><td>Commercial</td></tr>
+          <tr><td>Coaching discipline (<code>SKILL.md</code>, <code>/coach-drill</code>)</td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
+          <tr><td>All six <code>references/</code></td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
+          <tr><td>Run-tracking tool (<code>exptool/</code>)</td><td class="no">—</td><td class="yes">Yes</td></tr>
+          <tr><td>Mastery ledger (<code>scripts/ledger.py</code>)</td><td class="no">—</td><td class="yes">Yes</td></tr>
+          <tr><td>Expanded question bank</td><td class="no">—</td><td class="yes">Yes</td></tr>
+          <tr><td>Updates</td><td>Community</td><td>Priority</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="small dim" style="margin-top:1rem">Without the Pro tooling the skill degrades gracefully: you read the run yourself instead of using the report renderer, and you keep study cards instead of a ledger. Nothing breaks — you just do more of it by hand, which is arguably the point.</p>
+  </div>
+</section>
+
+<!-- ============ install ============ -->
 <section id="install">
   <div class="wrap">
-    <p class="eyebrow">安装</p>
-    <h2>一条命令</h2>
+    <p class="eyebrow">Install</p>
+    <h2>One command</h2>
 
     <div class="install" style="margin-top:1.4rem">
       <div class="install-row">
         <code id="install-cmd-2"><span class="prompt">$ </span>/plugin install ai-coding-coach --marketplace jackeyloveseven/ai-coding-coach</code>
-        <button type="button" data-copy="install-cmd-2">复制</button>
+        <button type="button" data-copy="install-cmd-2">Copy</button>
       </div>
-      <p class="install-note">之后用 <code>/plugin</code> 看状态、更新、卸载。装好后新开一个会话即可。</p>
+      <p class="install-note">Then use <code>/plugin</code> to check status, update, or uninstall. Open a new session afterwards.</p>
     </div>
 
     <p style="margin-top:1.6rem" class="small dim">
-      不想用插件，也可以克隆 skill 目录（只装到 <code>ai-coding-coach</code> 一个 skill，<code>/coach-drill</code> 不会跟着装上，而且不会自动更新）：
+      Prefer not to use the plugin system? Clone the skill directory instead (installs <code>ai-coding-coach</code> only — <code>/coach-drill</code> won't come along, and there are no automatic updates):
     </p>
     <div class="term" style="margin-top:.7rem">
       <div class="term-head">git</div>
@@ -658,12 +694,12 @@ footer{border-top:1px solid var(--line); padding-block:2.4rem 3rem; font-size:.8
 <footer>
   <div class="wide">
     <div class="foot-row">
-      <a href="https://github.com/jackeyloveseven/ai-coding-coach">GitHub 仓库</a>
-      <a href="https://github.com/jackeyloveseven/ai-coding-coach/blob/main/LICENSE">MIT 许可</a>
-      <a href="https://github.com/jackeyloveseven/ai-coding-coach/issues">Issue / PR</a>
+      <a href="https://github.com/jackeyloveseven/ai-coding-coach">GitHub repository</a>
+      <a href="https://github.com/jackeyloveseven/ai-coding-coach/blob/main/LICENSE">MIT license</a>
+      <a href="https://github.com/jackeyloveseven/ai-coding-coach/issues">Issues / PRs</a>
     </div>
     <p class="foot-note">
-      <strong>早期版本。</strong>这份 skill 是在实际使用中逐步长出来的，很多判断来自个人经验而非系统验证，欢迎按你自己的情况改。目前主要面向扩散模型 / RL 后训练方向的训练实验场景，其他场景需要自己调。
+      <strong>Scope.</strong> This skill grew out of actual use rather than being designed up front. The tiering criteria are empirical, mastery levels rest on the coach's observation rather than an objective benchmark, and the current coverage leans toward training experiments in diffusion and RL post-training. Known limits are stated rather than hidden, because the whole skill is built on calibrated confidence — a product that oversells itself contradicts its own teaching.
     </p>
   </div>
 </footer>
@@ -672,7 +708,7 @@ footer{border-top:1px solid var(--line); padding-block:2.4rem 3rem; font-size:.8
 (function(){
   'use strict';
 
-  /* ---- 深浅色：跟随系统为默认，手选后记住 ---- */
+  /* ---- colour scheme: follow the system by default, remember a manual pick ---- */
   var root = document.documentElement;
   var KEY = 'aicc-theme';
   var btn = document.getElementById('theme-toggle');
@@ -685,11 +721,11 @@ footer{border-top:1px solid var(--line); padding-block:2.4rem 3rem; font-size:.8
   }
   function paintLabel(){
     var cur = root.getAttribute('data-theme');
-    btn.textContent = cur === 'dark' ? '深色' : cur === 'light' ? '浅色' : '跟随系统';
+    btn.textContent = cur === 'dark' ? 'Dark' : cur === 'light' ? 'Light' : 'System';
     btn.setAttribute('aria-label',
-      cur === 'dark' ? '当前深色，点击切换到浅色'
-      : cur === 'light' ? '当前浅色，点击切换到跟随系统'
-      : '当前跟随系统，点击切换到深色');
+      cur === 'dark' ? 'Currently dark; click to switch to light'
+      : cur === 'light' ? 'Currently light; click to follow the system'
+      : 'Currently following the system; click to switch to dark');
   }
 
   var saved = read();
@@ -704,7 +740,7 @@ footer{border-top:1px solid var(--line); padding-block:2.4rem 3rem; font-size:.8
     } else if (cur === 'dark') {
       next = 'light';
     } else {
-      next = null;               // 浅 -> 回到跟随系统
+      next = null;               // light -> back to following the system
     }
     if (next) root.setAttribute('data-theme', next);
     else root.removeAttribute('data-theme');
@@ -712,7 +748,7 @@ footer{border-top:1px solid var(--line); padding-block:2.4rem 3rem; font-size:.8
     paintLabel();
   });
 
-  /* ---- 复制安装命令 ---- */
+  /* ---- copy the install command ---- */
   function bindCopy(btn){
     var target = document.getElementById(btn.getAttribute('data-copy'));
     if (!target) return;
@@ -736,12 +772,12 @@ footer{border-top:1px solid var(--line); padding-block:2.4rem 3rem; font-size:.8
       var text = target.textContent.replace(/^\s*\$\s*/, '').trim();
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(
-          function(){ flash('已复制'); },
-          function(){ selectAll(); flash('已选中'); }
+          function(){ flash('Copied'); },
+          function(){ selectAll(); flash('Selected'); }
         );
       } else {
         selectAll();
-        flash('已选中');
+        flash('Selected');
       }
     });
   }

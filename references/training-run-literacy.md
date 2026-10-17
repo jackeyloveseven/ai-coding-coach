@@ -1,68 +1,68 @@
-# 训练实验读数与排障判断力
+# Reading a training run, and triage judgment
 
-提炼自用户的飞书手册《训练实验自助手册（exp 工具）》（2026-09-28 整理）。分两部分：前五节是通用判断，长期有效；第六节是当时的环境设置，**使用前必须核对**。
+Contents: 1 Principles for reading · 2 What to watch per method · 3 Health checks and triage · 4 Starting a new run · 5 Self-check questions for reading a run · 6 Adapting this to your setup
 
-目录：一、读数原则 · 二、各方法看什么 · 三、健康检查与故障分诊 · 四、新开实验 · 五、读数自测题库 · 六、环境相关（需核对）
+Sections 1–5 are general judgment and hold over time. Section 6 is a checklist rather than a set of facts, because anything environment-specific goes stale.
 
-## 一、读数原则
+## 1 Principles for reading
 
-1. **看趋势，不看单步。** 把整段训练切成若干段（手册里是 8 段），比较各段均值，看从左到右的走向。单步值跳动大，没有信息量。（`exp report` 把这些段画成曲线，并把事前记录的判据标成图上的参考线，读数时直接对着看。）
-2. **RL 类方法用固定评测集判断收益。** 训练奖励每步换题，跳动很大，别盯着看。固定评测集上的分数「稳定高于起点」才说明真的变好了。
-3. **登记和查看要落到具体那一次运行的目录。** 比如同一个 SFT 下有 `smoke/` 和 `formal/`，写到 `formal/`，否则两次运行的记录会混在一起。
-4. **跑完 ≠ 有效，能连通 ≠ 就绪。** 进程正常结束、接口能响应，只说明「没崩」。效果要靠独立评测，服务是否真的可用要靠就绪证据。
-5. **生成类任务，人眼是最终标准。** 指标只是辅助，最后要看生成的图好不好。
+1. **Read the trend, not the step.** Cut the run into segments (8 is a workable number), compare segment means, and look at the direction left to right. Single-step values jump around and carry no information. A run-report tool can plot the segment means as a curve and draw the pre-registered criterion as a reference line, so you read against it directly.
+2. **For RL-style methods, judge the gain on a fixed eval set.** Training reward changes prompts every step and swings wildly — don't stare at it. Only a score on a fixed eval set that sits *reliably above the starting point* means the model actually improved.
+3. **Register and inspect at the level of the individual run directory.** If one SFT experiment has `smoke/` and `formal/` under it, write to `formal/`, or the records from the two runs will be mixed together.
+4. **Finished is not the same as effective, and reachable is not the same as ready.** A process exiting cleanly, or an endpoint answering, only means nothing crashed. Whether it worked needs an independent evaluation; whether a service is usable needs readiness evidence.
+5. **For generative tasks, the human eye is the final standard.** Metrics are a support; in the end you look at the samples.
 
-## 二、各方法看什么
+## 2 What to watch per method
 
-| 方法 | 主要看 | 好的样子 | 要当心 |
+| Method | Main signal | What good looks like | What to watch for |
 |---|---|---|---|
-| SFT | `loss` | 先快降，后慢慢变平 | 训练 loss 一直降，验证 loss 回升 → 过拟合（死记硬背） |
-| DPO | `rewards/accuracies`、`rewards/margins` | 准确率从 0.5 往上走，margin 变大 | loss 很快接近 0、准确率接近 1 → 可能任务太容易、学过头，要看生成效果 |
-| AWM / DiffusionNFT 等 RL | 固定评测集的奖励 | 分数稳定高于起点 | 训练奖励跳动大不用盯；手册称 AWM 的 loss 本来就接近 0，不用看 |
-| 所有方法 | `grad_norm` | 大致平稳 | 突然大 10 倍、出现 nan 或 inf → 数值问题 |
+| SFT | `loss` | Falls fast, then flattens out | Training loss keeps falling while validation loss turns upward → overfitting (memorization) |
+| DPO | `rewards/accuracies`, `rewards/margins` | Accuracy climbs up from 0.5, margins widen | Loss approaching 0 fast and accuracy near 1 → the task may be too easy, or the model has overlearned. Look at generation quality |
+| RL post-training (reward-based) | Reward on a fixed eval set | Sits reliably above the starting point | Training reward swinging is expected — don't watch it. Some RL objectives have a loss that sits near zero by construction and is not informative |
+| All methods | `grad_norm` | Roughly flat | A sudden 10× jump, or NaN/inf → a numerical problem |
 
-## 三、健康检查与故障分诊
+## 3 Health checks and triage
 
-先看健康检查：tmux 会话还在不在；有没有失败标记文件；日志最后更新是多久之前（很久没更新，可能卡在奖励服务、NCCL 或死锁）；结束状态是不是正常完成。
+Health checks first: is the session still alive; is there a failure marker file; how long ago did the log last update (a long gap can mean it's stuck on a reward service, on NCCL, or in a deadlock); did it finish with a normal status.
 
-出问题分两类，处理方式不同：
+Problems split into two kinds, handled differently.
 
-**运维型故障（他要自己掌握，是基本功）**
+**Operational failures (the user should own these — basic competence)**
 
-- 报错里有 `timeout`、`Connection`、`HTTP 5xx`、`reward` 之类的词 → 网络或服务临时出问题。先测服务是否存活：HTTP 返回 `200` 或 `401` 都说明活着（`401` 只是没带凭证），卡住不动或返回 `000` 说明挂了。服务正常，再清掉失败标记并续跑。
-- `CUDA out of memory` → 常常是卡被别人占了。先看是谁的进程（`nvidia-smi`，再 `ps -o user,pid,etime,cmd -p <pid>`），别急着改代码。
+- An error containing `timeout`, `Connection`, `HTTP 5xx`, `reward` and the like → a network or service problem, probably temporary. Test whether the service is alive first: an HTTP `200` or `401` both mean it's up (`401` just means no credentials were sent); hanging, or a `000`, means it's down. Once the service is fine, clear the failure marker and resume.
+- `CUDA out of memory` → often means someone else took the GPU. Find whose process it is (`nvidia-smi`, then `ps -o user,pid,etime,cmd -p <pid>`) before touching any code.
 
-**代码型真 bug（值得问 AI）**
+**Real code bugs (worth asking AI about)**
 
-- Python 报错、shape 对不上、`nan`。把完整报错栈和相关代码给 AI。教学要点是：定位过程讲成方法，修好后让用户用一句话复述根因。
+- Python tracebacks, shape mismatches, NaN. Hand the AI the full traceback and the relevant code. The teaching point: narrate the localization as a method, and after the fix have the user restate the root cause in one sentence.
 
-## 四、新开实验的流程
+## 4 Starting a new run
 
-1. 复制一个已经跑通的实验目录，只改参数。启动命令放在 `launch.sh`，日志写到 `logs/`。
-2. 登记实验（名字、机器、具体运行目录、方法、tmux 名、说明）。
-3. 确认要用的卡是空的。
-4. 启动前再看一眼 GPU 状态并确认。
-5. 1–2 分钟后看日志，确认模型正常加载。
-6. **先把步数设成 2 试通，再改成正式步数。** 用最小的代价先发现错误。
+1. Copy an experiment directory that already works, and change only the parameters. Put the launch command in a script, and write logs to a log directory.
+2. Register the run: name, machine, the exact run directory, method, session name, notes.
+3. Confirm the GPUs you intend to use are free.
+4. Look at GPU state once more before launching, and confirm.
+5. Check the log after a minute or two to confirm the model loaded properly.
+6. **Set the step count to 2 and get it running end to end first, then change it to the real number.** Find the errors at the lowest possible cost.
 
-## 五、读数自测题库
+## 5 Self-check questions for reading a run
 
-教学时从这里挑，一次只问一两个，不附答案：
+Pick one or two when teaching; don't attach answers:
 
-- 这条曲线从头到尾变了多少？它学到东西了吗？
-- 训练 loss 降、验证 loss 升，说明什么？
-- DPO 的 loss 很快接近 0、accuracy 接近 1，是好事吗？你会去看什么来确认？
-- `grad_norm` 突然放大 10 倍，最先怀疑什么？
-- 这次 RL 的训练奖励涨了，你怎么确认是真的变好，不是换题带来的波动？
-- 你打算继续、停，还是换参数？依据是什么？
-- 这个 launch 脚本里，学习率、每步 prompt 数、总步数分别是多少？
+- How much did this curve move from start to finish? Did it learn anything?
+- Training loss falling while validation loss rises — what does that tell you?
+- DPO loss approaching 0 fast with accuracy near 1 — is that good? What would you look at to confirm?
+- `grad_norm` suddenly jumped 10×. What do you suspect first?
+- Training reward went up on this RL run. How do you confirm it's real improvement and not drift from changing prompts?
+- Do you plan to continue, stop, or change a parameter? On what basis?
+- In this launch script, what are the learning rate, the prompts per step, and the total step count?
 
-## 六、环境相关（当时的设置，使用前必须核对）
+## 6 Adapting this to your setup
 
-以下是 2026-09-28 整理手册时的环境说明。它们描述的是当时的情况，不能据此认定现在仍适用。使用前先确认：工具版本、目标主机、运行目录、GPU 占用、恢复点。
+Everything below is a question to answer about *your* environment before relying on it. None of it is a fact about the world, and none of it can be assumed to still be true from one month to the next.
 
-- **`exp` 工具**：登记、查看、启停、续跑实验的统一入口。`runs.conf` 一行一个实验，共六列：名字、机器、实验目录、方法、tmux、说明。每条命令执行前会打印它背后真正跑的命令。
-- **进度读取器**：按方法名找 `progress/` 下同名脚本，找不到就用通用的 `generic.py`。通用读取器按 `*.jsonl` → `trainer_state.json` → tensorboard 事件文件 → 日志里的 `loss=0.12` 这类文字的顺序找指标，用找到的第一种。
-- **共享盘**：手册说共享盘上每台机器看到的都是同一份文件，「机器」一列只决定去哪台看 GPU 和 tmux。
-- **AWM 的判定标准**：手册写的是固定 dev 集上的 `change` 稳定在 +0.3 以上，并且之后几次评测都保持住。这是当时那个奖励模型和设置下的阈值，换奖励模型或换设置不能直接套用。
-- **奖励服务的健康检查**：思路见第三节。具体地址、端口、是否需要凭证都以现状为准，不要照抄旧地址。
+- **The run-tracking tool**: is there a single entry point for registering, inspecting, starting, stopping and resuming runs? If it exists, learn what it prints before it acts — a tool that echoes the underlying command before running it teaches you the command.
+- **The progress reader**: how does it locate metrics? A common design is to look for a per-method script first and fall back to a generic reader, which tries a set of sources in order (`*.jsonl`, then a trainer-state file, then tensorboard event files, then patterns like `loss=0.12` in the log) and uses the first one it finds. Verify the order against your own layout, or you'll read a stale source.
+- **Shared storage**: does every machine see the same files, or does the machine column determine where to look? This changes whether "check the log" and "check the GPU" are the same operation.
+- **Reward thresholds**: any specific threshold for declaring an improvement belongs to one reward model and one configuration. Changing either invalidates it. Never carry a threshold across setups.
+- **Reward-service health checks**: the approach is in §3. The address, port, and whether credentials are needed are all things to check as they are now — never copy an old address.

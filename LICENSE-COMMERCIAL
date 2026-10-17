@@ -1,0 +1,89 @@
+COMMERCIAL LICENSE — AI Coding Coach, Pro Edition
+Copyright (c) 2026 jackeyloveseven. All rights reserved.
+
+This license covers the Pro Edition of AI Coding Coach (the "Software"),
+which consists of the files delivered in the Pro Edition bundle: the
+exptool/ directory, scripts/ledger.py, the expanded question bank, and any
+other material marked as Pro Edition content. It does NOT cover the
+Community Edition, which is licensed separately under the MIT License in
+LICENSE.
+
+1. GRANT OF LICENSE
+
+   Subject to payment of the applicable fee and to the terms below, you are
+   granted a non-exclusive, non-transferable, perpetual license to:
+
+   (a) install and use the Software for your own personal or internal
+       business purposes, on any number of machines that you personally
+       use; and
+
+   (b) modify the Software for your own use, including adapting it to your
+       own infrastructure.
+
+2. RESTRICTIONS
+
+   You may NOT:
+
+   (a) redistribute, publish, sublicense, sell, rent, lease, lend, or
+       otherwise make the Software available to any third party, in
+       original or modified form;
+
+   (b) include the Software, in whole or in part, in any product or service
+       that you distribute or sell;
+
+   (c) share your copy, or any derivative of it, with anyone outside your
+       own organization;
+
+   (d) remove or alter this license, or any copyright notice, from the
+       Software.
+
+   A single license covers one individual. If more than one person will use
+   the Software, each user requires their own license, unless a team license
+   has been purchased.
+
+3. OWNERSHIP
+
+   The Software is licensed, not sold. jackeyloveseven retains all right,
+   title, and interest in and to the Software, including all intellectual
+   property rights. No rights are granted except as expressly stated in
+   Section 1.
+
+4. FEEDBACK
+
+   If you send suggestions or feedback, you grant a non-exclusive,
+   perpetual, irrevocable, royalty-free license to use and incorporate it,
+   with no obligation to you.
+
+5. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+   THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE SOFTWARE IS
+   WITH YOU.
+
+   The Software is a teaching aid. It does not replace engineering judgment.
+   You remain solely responsible for any code you write, run, ship, or
+   deploy, and for any experiment you design or conclude from.
+
+6. LIMITATION OF LIABILITY
+
+   IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+   FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+   DEALINGS IN THE SOFTWARE. THE AUTHOR'S TOTAL AGGREGATE LIABILITY UNDER
+   THIS LICENSE SHALL NOT EXCEED THE AMOUNT YOU PAID FOR THE SOFTWARE.
+
+7. TERMINATION
+
+   This license terminates automatically if you breach any of its terms. On
+   termination you must destroy all copies of the Software. Sections 2, 3,
+   5, 6 and 8 survive termination.
+
+8. GOVERNING LAW
+
+   This license is governed by the laws of the jurisdiction in which the
+   author resides, without regard to its conflict-of-law provisions.
+
+For licensing enquiries, team licenses, or commercial arrangements beyond
+the scope of this grant, contact the author through the project homepage.

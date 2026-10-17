@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-"""通用进度读取器：从一次运行的目录里读指标，切成若干段打印趋势。
+"""Generic progress reader: read metrics out of one run's directory and print the
+trend as a set of segment means.
 
-用法：
-  generic.py <运行目录> [--segments 8] [--limit 6]
+Usage:
+  generic.py <run dir> [--segments 8] [--limit 6]
 
-按这个顺序找指标，用找到的第一种：
-  1. *.jsonl                每行一个 JSON
-  2. trainer_state.json     HuggingFace Trainer / TRL 的 SFT、DPO 都会写
-  3. events.out.tfevents.*  tensorboard（需要远端装了 tensorboard）
-  4. 日志里的 loss=0.12、reward: 0.5 这类文字
+It looks for metrics in this order and uses the first source it finds:
+  1. *.jsonl                 one JSON object per line
+  2. trainer_state.json      written by HuggingFace Trainer / TRL SFT and DPO
+  3. events.out.tfevents.*   tensorboard (needs tensorboard installed remotely)
+  4. text in the log, such as loss=0.12 or reward: 0.5
 
-只打印每段的平均值。单步值跳动大，没有信息量，看的是从左到右的趋势。
-名字里带 loss、reward、acc、margin、grad、kl、lr 的指标优先显示。
+Only segment means are printed. Single-step values jump around and carry no
+information; what you're reading is the direction, left to right.
+Metrics whose names contain loss, reward, acc, margin, grad, kl or lr sort first.
 
-这个脚本会被 exp 用管道送到远端执行（ssh 机器 "python3 - 目录" < generic.py），
-所以不要 import 本目录下的其他文件，也别依赖运行时的工作目录。
+exp pipes this script to the remote host
+(ssh machine "python3 - dir" < generic.py), so don't import anything else from
+this directory, and don't rely on the working directory at runtime.
 """
 
 import argparse
@@ -27,31 +30,33 @@ DEFAULT_SEGMENTS = 8
 DEFAULT_LIMIT = 6
 PREFER = ("loss", "reward", "acc", "margin", "grad", "kl", "lr")
 
-# 这些名字是元数据，不是指标。只有 6 个显示位，别让它们占掉。
-# 用 --all 可以关掉这个过滤。只做整名匹配，所以 step_time、num_steps 不会被误伤。
+# These names are metadata, not metrics. There are only 6 display slots; don't
+# let them take one. --all turns the filter off. Matching is on the whole name,
+# so step_time and num_steps are not caught by accident.
 SKIP = {"step", "steps", "epoch", "epochs", "global_step", "timestamp", "wall_time", "elapsed"}
 
-# 单个文件最多读末尾这么多字节。训练日志动辄几 GB，全读进来会把内存吃满。
+# Read at most this many bytes from the end of a single file. Training logs run
+# to several GB; reading one whole would exhaust memory.
 MAX_BYTES = 20 * 1024 * 1024
 
-# 日志文字里的指标：loss=0.12、reward: 0.5、grad_norm = 1.2e-3、change=+0.3
+# Metrics in log text: loss=0.12, reward: 0.5, grad_norm = 1.2e-3, change=+0.3
 TEXT_METRIC = re.compile(
     r"([A-Za-z_][A-Za-z0-9_./-]*)\s*[:=]\s*([-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)"
 )
 
 
 def is_number(value):
-    """bool 是 int 的子类，但 true/false 不是指标。"""
+    """bool is a subclass of int, but true/false aren't metrics."""
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def iter_lines(path):
-    """逐行读文本文件；文件太大就只读末尾那一段。"""
+    """Read a text file line by line; for a large file, only the tail."""
     size = path.stat().st_size
     with path.open("r", encoding="utf-8", errors="replace") as handle:
         if size > MAX_BYTES:
             handle.seek(size - MAX_BYTES)
-            handle.readline()  # 丢掉可能被截断的半行
+            handle.readline()  # drop the half line the seek probably cut
         for line in handle:
             yield line
 
@@ -90,7 +95,8 @@ def from_trainer_state(path):
 
 
 def from_tfevents(paths):
-    """读 tensorboard 事件文件。没装 tensorboard 就返回 None（表示「没法试」，不是「没有指标」）。"""
+    """Read tensorboard event files. Returns None when tensorboard isn't installed
+    (meaning "couldn't try", not "there are no metrics")."""
     try:
         from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
     except ImportError:
@@ -117,10 +123,10 @@ def from_log_text(paths):
 
 
 def collect(run_dir):
-    """返回 (series, 来源说明)；一个都找不到就返回 ({}, None)。"""
+    """Returns (series, source description); ({}, None) when nothing is found."""
     run_dir = Path(run_dir)
     if not run_dir.is_dir():
-        sys.exit(f"不是目录：{run_dir}")
+        sys.exit(f"not a directory: {run_dir}")
 
     for path in sorted(run_dir.glob("*.jsonl")):
         series = from_jsonl(path)
@@ -137,39 +143,42 @@ def collect(run_dir):
     if events:
         series = from_tfevents(events)
         if series:
-            return series, f"{len(events)} 个 tfevents 文件"
+            return series, f"{len(events)} tfevents files"
         if series is None:
-            print("提示：找到 tfevents，但远端没装 tensorboard，跳过。", file=sys.stderr)
+            print("note: found tfevents, but tensorboard isn't installed on the remote side; skipping.", file=sys.stderr)
 
     logs = sorted(path for path in run_dir.rglob("*.log") if path.is_file())
     if logs:
         series = from_log_text(logs)
         if series:
-            return series, f"{len(logs)} 个日志文件"
+            return series, f"{len(logs)} log file(s)"
 
     return {}, None
 
 
 def rank(name):
-    """名字里带 loss/reward/acc/... 的排前面。"""
+    """Names containing loss/reward/acc/... sort first."""
     low = name.lower()
     return (0 if any(word in low for word in PREFER) else 1, name)
 
 
 def select_metrics(series, limit=DEFAULT_LIMIT, show_all=False):
-    """挑出要显示的指标名：默认滤掉 step/epoch 这类元数据，按 rank 排序，最多 limit 个。
+    """Pick the metric names to show: by default drop step/epoch-style metadata,
+    sort by rank, keep at most limit.
 
-    单独抽出来给 exp report 复用——报告要跟 status 显示同一批指标。
+    Pulled out on its own so exp report can reuse it — the report has to show the
+    same set of metrics as status does.
     """
     names = list(series)
     if not show_all:
         kept = [name for name in names if name.lower() not in SKIP]
-        names = kept or names  # 全被过滤掉就不过滤，宁可多显示也别什么都不显示
+        names = kept or names  # if everything was filtered, don't filter at all
     return sorted(names, key=rank)[:limit]
 
 
 def segments(values, count):
-    """把一段序列切成 count 段，返回每段的平均值。段数比点数还多时空段记 nan。"""
+    """Cut a series into count segments and return each segment's mean. Segments
+    beyond the number of points come back as nan."""
     total = len(values)
     out = []
     for index in range(count):
@@ -192,12 +201,11 @@ def render(series, source, count, limit, show_all=False):
     count = max(1, min(count, points))
 
     width = max([len(name) for name in names] + [8])
-    # 中文按两格宽算，所以表头补的空格要减掉「指标」占的两格
-    header = "指标" + " " * max(1, width - 4)
+    header = "metric" + " " * max(1, width - 6)
     header += " " + " ".join(f"{index + 1:>9}" for index in range(count))
-    header += f" {'变化':>8}"
+    header += f" {'change':>10}"
 
-    print(f"来源: {source} ｜ 共 {points} 个点 ｜ 切 {count} 段")
+    print(f"source: {source} | {points} points | {count} segments")
     print(header)
     for name in names:
         segs = segments(series[name], count)
@@ -206,33 +214,36 @@ def render(series, source, count, limit, show_all=False):
 
 
 def dump_json(run_dir):
-    """把原始序列按 JSON 输出（给 exp report 画图用）。找不到指标就是空的 series。
+    """Dump the raw series as JSON (for exp report to plot). An empty series when
+    no metrics are found.
 
-    和表格输出共用 collect()，所以「找哪个来源、怎么解析」只有一份实现。
+    Shares collect() with the table output, so "which source, parsed how" has only
+    one implementation.
     """
     series, source = collect(run_dir)
     return json.dumps({"source": source, "series": series}, ensure_ascii=False)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="通用进度读取器")
-    parser.add_argument("run_dir", help="某一次运行的目录")
-    parser.add_argument("--segments", type=int, default=DEFAULT_SEGMENTS, help="切成几段（默认 8）")
-    parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="最多显示几个指标（默认 6）")
-    parser.add_argument("--all", action="store_true", help="连 step/epoch 这类元数据也一起显示")
-    parser.add_argument("--json", action="store_true", help="输出原始序列的 JSON（给 exp report 用）")
+    parser = argparse.ArgumentParser(description="Generic progress reader")
+    parser.add_argument("run_dir", help="the directory of one run")
+    parser.add_argument("--segments", type=int, default=DEFAULT_SEGMENTS, help="how many segments (default 8)")
+    parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="how many metrics to show at most (default 6)")
+    parser.add_argument("--all", action="store_true", help="also show step/epoch-style metadata")
+    parser.add_argument("--json", action="store_true", help="emit the raw series as JSON (for exp report)")
     args = parser.parse_args()
 
     if args.json:
-        # 报告要画曲线，得拿逐步的原始值，而不是分段均值。没有指标也照常输出空壳。
+        # The report needs per-step raw values to plot, not segment means. Emit an
+        # empty shell when there are no metrics, same as always.
         print(dump_json(args.run_dir))
         return 0
 
     series, source = collect(args.run_dir)
     if not series:
-        print(f"在 {args.run_dir} 里没找到可读的指标。")
-        print("找过：*.jsonl、trainer_state.json、events.out.tfevents.*、*.log")
-        print("如果这个方法的指标格式比较特殊，给它写一个专用的 progress/<方法>.py。")
+        print(f"no readable metrics found in {args.run_dir}.")
+        print("looked for: *.jsonl, trainer_state.json, events.out.tfevents.*, *.log")
+        print("if this method's metric format is unusual, write it a dedicated progress/<method>.py.")
         return 1
 
     render(series, source, args.segments, args.limit, args.all)

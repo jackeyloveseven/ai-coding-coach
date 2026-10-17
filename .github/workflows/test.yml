@@ -13,14 +13,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Windows 上出过真 bug（python3 是 Store 占位程序、stdout 编码），
-        # 两个平台都跑，免得再悄悄腐烂。
+        # Windows has produced real bugs here (python3 being the Store stub,
+        # stdout encoding), so run both platforms rather than letting it rot
+        # silently.
         os: [ubuntu-latest, windows-latest]
 
     env:
-      # 测试脚本和被测代码都会往 stdout 写中文。英文 locale 的 Windows
-      # （windows-latest runner 就是）上 Python 默认用 cp1252，编不出中文，
-      # 会 UnicodeEncodeError。（中文 locale 的机器上是 cp936，只会乱码不崩。）
+      # PLAN files may hold non-ASCII text, and both the test scripts and the code
+      # under test write to stdout. On an English-locale Windows (which is what
+      # the windows-latest runner is) Python defaults to cp1252, which can't encode
+      # it and raises UnicodeEncodeError. (On a Chinese-locale machine the default
+      # is cp936, which mangles it without crashing.)
       PYTHONUTF8: "1"
 
     steps:
@@ -30,11 +33,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: 进度读取器 generic.py
+      - name: Progress reader, generic.py
         working-directory: exptool
         run: python tests/test_generic.py
 
-      - name: exp 命令（local 模式）
+      - name: exp command (local mode)
         working-directory: exptool
         shell: bash
         run: bash tests/test_exp.sh

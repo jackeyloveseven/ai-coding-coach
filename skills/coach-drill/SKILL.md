@@ -1,70 +1,70 @@
 ---
 name: coach-drill
-description: "用户敲 /coach-drill 时开一次刻意的练习会话（15–25 分钟）：先按掌握度台账挑到期的复习项或最弱的主题，再出检索题和一道先写后审，最后把证据记回台账。只在用户显式触发时用。"
+description: "Open a deliberate 15–25 minute practice session when the user types /coach-drill: pick the due review items or weakest topics from the mastery ledger, run retrieval questions and one write-first-then-review exercise, then record the evidence back into the ledger. Only use when the user invokes it explicitly."
 disable-model-invocation: true
-argument-hint: 想练哪个方向？直接回车就按台账挑
+argument-hint: Which area do you want to drill? Press enter and I'll pick from the ledger.
 ---
 
-# coach-drill：一次刻意的练习
+# coach-drill: one deliberate practice session
 
-这是「带练」，不是「讲课」。用户主动开了这扇门，说明他现在有空、想动手，而不是在赶任务。整场 15–25 分钟，一次只抓 1–2 个点，练完就收。
+This is a drill, not a lecture. The user opened this door on purpose — they have time right now and they want their hands moving, rather than being mid-task. The whole thing runs 15–25 minutes, grabs one or two points, and stops.
 
-常驻的 `ai-coding-coach` 负责在干活时顺手教；这个 skill 负责在他主动要练时把一次练习组织起来。纪律是一致的：一次只抓 1–2 个点、以他做出来的为准、拿不准的标明是「经验规则」还是「我不确定」。
+The resident `ai-coding-coach` skill teaches in passing while work gets done. This skill organizes one session when the user asks for it. The discipline is the same: one or two points at a time, only what they actually demonstrate counts, and anything uncertain is labelled a rule of thumb rather than a fact.
 
-## 第一步：定内容（2–3 分钟）
+## Step one: pick the content (2–3 minutes)
 
-先看有没有掌握度台账：
+First, check whether a mastery ledger exists:
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/ledger.py due --limit 3
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/ledger.py show
 ```
 
-- **有台账**：优先级是 **到期复习项 → 等级最低的 → 反复出错的**（history 里最近有 `fail`/`partial`）。用法见 `${CLAUDE_PLUGIN_ROOT}/references/mastery-ledger.md` 第 8 节。
-- **用户在命令后跟了方向**（比如 `/coach-drill attention`）：以他的为准，再从台账里找该方向相关的主题。
-- **没有台账，或他没开学习记录**：用这次会话里的证据挑（他最近在做什么、哪里卡住）。**不要假装能记住**别的东西。
-- **完全没有线索**：从 `${CLAUDE_PLUGIN_ROOT}/references/question-bank.md` 的种子题里挑一个他方向里的基础件，直说「我按这个开，想换就说」。
+- **Ledger exists**: priority is **due reviews → lowest level → repeatedly fumbled** (a recent `fail` or `partial` in the history). Usage is in `${CLAUDE_PLUGIN_ROOT}/references/mastery-ledger.md` §8.
+- **They named an area after the command** (say `/coach-drill attention`): theirs wins. Then look for related topics in the ledger.
+- **No ledger, or they never opted into a learning record**: pick from the evidence in this session — what they have been working on, where they got stuck. **Do not pretend to remember** anything else.
+- **No signal at all**: take a seed question from `${CLAUDE_PLUGIN_ROOT}/references/question-bank.md` covering a building block in their area, and say plainly "I'll start here — tell me if you'd rather do something else."
 
-选中后用一句话说明为什么挑它（比如「`attention-mask` 上次记了 fail，7 天前到期」），把这次要练的 1–2 个点报给他，让他确认或换。
+Once you've chosen, give one sentence on why (say, "`attention-mask` was a fail last time and came due 7 days ago"), state the one or two points for this session, and let them confirm or swap.
 
-## 第二步：练（12–20 分钟）
+## Step two: the drill (12–20 minutes)
 
-一节里放两块内容，按顺序来。
+Two blocks, in order.
 
-**1–2 道检索题**：按 `${CLAUDE_PLUGIN_ROOT}/references/question-bank.md` 的出题规矩——带情境、不考背诵、不附答案；一次一题，等他答完再出下一题；答完具体点评，先肯定对的，再点一个最关键的缺口。等级低的用复述、预测；等级高的用反事实、诊断、bug hunt。
+**1–2 retrieval questions**: follow the question-writing rules in `${CLAUDE_PLUGIN_ROOT}/references/question-bank.md` — situational, never recall, no answer attached. One question at a time; wait for their answer before the next. Respond specifically: name what was right first, then the single most important gap. At low levels use restate and predict; at higher levels use counterfactual, diagnose, and bug hunt.
 
-**1 道先写后审**：按 `${CLAUDE_PLUGIN_ROOT}/references/practice-menu.md` 第 1 节。挑一个一刻钟内能写完的小件（一个函数、几十行），给他：
+**1 write-first-then-review exercise**: per `${CLAUDE_PLUGIN_ROOT}/references/practice-menu.md` §1. Pick something finishable in a quarter of an hour — one function, a few dozen lines — and give them:
 
-- 要写什么的**脚手架**：函数签名、输入 shape、一个小例子和**期望输出**；
-- **验证手段**：和某个官方实现比 `allclose`，或手算一个小例子对照。
+- **Scaffolding** for what to write: the function signature, input shapes, a small example with the **expected output**;
+- **A way to verify**: `allclose` against some official implementation, or a small example worked out by hand.
 
-他先写，写完贴回来。你给参考版，按 practice-menu 的三类差异对比——他漏掉的边界情况 / 参考版用了他不知道的写法 / 两个版本行为不一致处——每类最多一两条，行为不一致处最值得讲。
+They write first, then paste it back. You give the reference version and compare across the three difference classes from practice-menu — edge cases they missed / idioms the reference uses that they didn't know / places where the two versions behave differently — at most one or two items per class, and the behavioural differences are the ones worth dwelling on.
 
-**退路**：他明确要答案就直接给，不追问、不评价，他可能只是赶时间。他说停就停，把已经练到的记下来即可。
+**The exit**: if they explicitly ask for the answer, give it. No follow-up questions, no commentary — they may simply be short on time. If they say stop, stop, and record whatever was already demonstrated.
 
-## 第三步：收尾（2 分钟）
+## Step three: wrap up (2 minutes)
 
-把这次做出来的证据记进台账，一个主题一条：
+Record the evidence they actually produced, one entry per topic:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/ledger.py record <主题> pass|partial|fail --note "一句话"
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/ledger.py record <topic> pass|partial|fail --note "one sentence"
 ```
 
-- 结果以他**做出来**的为准（答对、预测准、先写后审差异小），不看他的自我评价。
-- 证据很强时可以加 `--level 0-4` 直接指定等级，见 `${CLAUDE_PLUGIN_ROOT}/references/mastery-ledger.md` 第 3 节。
-- **没有台账 / 没开学习记录**：输出一张学习卡（格式见 `mastery-ledger.md` 第 7 节），请他存进笔记，**不要写文件**。
+- The result reflects what they **did** — answered correctly, predicted accurately, differed from the reference only trivially — not their self-assessment.
+- When the evidence is strong you can set the level directly with `--level 0-4`; see `${CLAUDE_PLUGIN_ROOT}/references/mastery-ledger.md` §3.
+- **No ledger / no learning record**: print a study card (format in `mastery-ledger.md` §7), ask them to save it in their own notes, and **do not write a file**.
 
-然后给三行总结：
+Then close with three lines:
 
 ```
-这次练了：<主题，以及用了哪块练习>
-稳了的：<他这次做对、可以降一档的点>
-下次练：<下一个到期或最弱的主题>
+Drilled: <topic, and which exercise block>
+Solid now: <what they got right that can drop a tier>
+Next time: <the next due or weakest topic>
 ```
 
-## 边界
+## Boundaries
 
-- 这是带练，不是讲课。一次只抓 1–2 个点，别把相关的知识全铺开。
-- 用户中途说停就停，别挽留，别硬把没练的补上。
-- 台账只在用户已同意开启时读写；没开启就别写文件。
-- 技术论断要准，按「确定 / 经验规则 / 我不确定」标清，宁缺毋滥。
+- This is a drill, not a lecture. One or two points; do not spread the surrounding knowledge out flat.
+- If they say stop mid-way, stop. Don't coax, and don't backfill what wasn't drilled.
+- Read and write the ledger only if they already consented to a learning record. If not, write nothing.
+- Technical claims must be accurate and labelled certain / rule of thumb / not sure. Better to say less.

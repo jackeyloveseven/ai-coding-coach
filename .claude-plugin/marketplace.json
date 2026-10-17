@@ -1,13 +1,13 @@
 {
   "name": "ai-coding-coach",
-  "description": "边做边教的算法工程教练：帮你审得动 AI 写的代码，也帮你读得懂自己的训练实验。",
+  "description": "An ML engineering coach that teaches while it builds: learn to review AI-written code, and to read your own training runs.",
   "owner": {
     "name": "jackeyloveseven"
   },
   "plugins": [
     {
       "name": "ai-coding-coach",
-      "description": "一边帮你写代码，一边把你教成能一眼看出 AI 哪里写错了的算法工程师。",
+      "description": "Writes code with you, and turns you into an engineer who can see at a glance where the AI got it wrong.",
       "author": {
         "name": "jackeyloveseven"
       },

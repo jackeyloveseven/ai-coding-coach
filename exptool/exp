@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
-# exp —— 训练实验的统一入口：登记、查看、启停、续跑。
+# exp - one entry point for training runs: register, inspect, start, stop, resume.
 #
-# 每条命令执行前都会打印它背后真正跑的那条命令（灰色的 + ...），
-# 方便你复制下来自己改着用。熟了以后不用这个工具也能干。
+# Every command prints the command it actually runs first (the grey + ...), so you
+# can copy it, modify it, and use it directly. Once you're comfortable you don't
+# need this tool at all.
 #
-# 配置：默认读 ~/.config/exptool/config，可以用环境变量 EXPT_CONF 指定。
-# 没配过就从 exptool.conf.example 复制一份改。
+# Config: read from ~/.config/exptool/config by default; override with EXPT_CONF.
+# If you haven't configured it, copy exptool.conf.example and edit that.
 #
-# 设计上只有两个外部依赖：ssh（机器列不是 local 时）和 tmux（启停用）。
-# 查看类的命令不依赖 tmux，没装也能用。
+# Only two external dependencies by design: ssh (when the machine column isn't
+# local) and tmux (for start/stop). The read-only commands don't need tmux.
 
 set -uo pipefail
 
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# ---- 默认配置，会被配置文件覆盖 -------------------------------------------
+# ---- defaults; the config file overrides these ----------------------------
 RUNS_CONF="$SELF_DIR/runs.conf"
 REWARD_HEALTH_URL=""
 SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=5"
@@ -23,10 +24,12 @@ FAILED_MARKER="FAILED"
 DONE_MARKER="DONE"
 LOG_DIR="logs"
 PLAN_FILE="PLAN.md"
-# exp report 的渲染器在本机跑，用它。留空就用 REMOTE_PYTHON（local 模式下两者本来就是同一个）。
+# The exp report renderer runs locally, so use it. Empty means fall back to
+# REMOTE_PYTHON (in local mode the two are the same thing anyway).
 LOCAL_PYTHON=""
-# exp report 默认把报告写到这里（相对当前目录）。默认当前目录，别写进运行目录——
-# 那可能是共享盘、只读或别人的。用 exp report --out <路径> 可以单次覆盖。
+# Where exp report writes by default (relative to the current directory). Keep it
+# out of the run directory - that may be shared, read-only, or someone else's.
+# Override for a single call with exp report --out <path>.
 REPORT_DIR="."
 # ---------------------------------------------------------------------------
 
@@ -37,7 +40,7 @@ if [ -f "$EXPT_CONF" ]; then
 fi
 
 show_cmd() {
-  # 打到 stderr：stdout 要留给数据，不然命令回显会污染 $(...)
+  # Goes to stderr: stdout is reserved for data, or the echo would pollute $(...)
   if [ -t 2 ]; then
     printf '\033[90m+ %s\033[0m\n' "$*" >&2
   else
@@ -46,7 +49,7 @@ show_cmd() {
 }
 
 run_on() {
-  # run_on <机器|local> <命令>
+  # run_on <machine|local> <command>
   local machine="$1"; shift
   local cmd="$*"
   if [ "$machine" = "local" ]; then
@@ -59,7 +62,7 @@ run_on() {
   fi
 }
 
-# 表格：用 Tab 分隔，交给 column 对齐（中文列宽也算得对）
+# Table: tab separated, handed to column for alignment.
 fmt_table() {
   if command -v column >/dev/null 2>&1; then
     column -t -s "$(printf '\t')"
@@ -69,17 +72,22 @@ fmt_table() {
 }
 
 plan_field() {
-  # 从 stdin 的「字段：值」行里取值。全角/半角冒号都认，行首允许 - 或 *
+  # Pull a "field: value" line out of stdin. Accepts both the full-width and the
+  # ASCII colon; a leading - or * is allowed.
   #
-  # 冒号必须写成 \(:\|：\)，不能塞进 [] —— sed 的方括号按字节匹配，
-  # 全角冒号是 3 字节，塞进去只会被吃掉第一个字节，值前面留一串乱码。
+  # The colon has to be written \(:\|：\), not folded into a bracket expression:
+  # sed matches brackets byte by byte, and the full-width colon is 3 bytes, so
+  # putting it in [] would eat only its first byte and leave mojibake before the
+  # value. $1 may be an alternation, and it must arrive already grouped as
+  # '\(Criterion\|判据\)' - \| binds loosest, so an ungrouped 'Criterion\|判据'
+  # would turn the whole regex into "starts with Criterion" OR "contains 判据:".
   sed -n "s/^[[:space:]]*[-*]*[[:space:]]*$1[[:space:]]*\(:\|：\)[[:space:]]*//p" | head -n 1
 }
 
 runs_lines() {
   if [ ! -f "$RUNS_CONF" ]; then
-    echo "找不到实验登记表：$RUNS_CONF" >&2
-    echo "先复制一份模板：cp $SELF_DIR/runs.conf.example $RUNS_CONF" >&2
+    echo "runs registry not found: $RUNS_CONF" >&2
+    echo "copy the template first: cp $SELF_DIR/runs.conf.example $RUNS_CONF" >&2
     return 1
   fi
   grep -vE '^[[:space:]]*(#|$)' "$RUNS_CONF"
@@ -94,7 +102,7 @@ find_run() {
       return 0
     fi
   done < <(runs_lines)
-  echo "没有登记叫 $want 的实验。敲 exp list 看有哪些。" >&2
+  echo "no run named $want is registered. Run exp list to see what is." >&2
   return 1
 }
 
@@ -103,7 +111,8 @@ first_run_name() {
 }
 
 resolve_dir() {
-  # 相对路径按登记表所在目录解析，写 ./examples/demo-sft 也能用
+  # Relative paths resolve against the registry's own directory, so
+  # ./examples/demo-sft works from anywhere.
   local dir="$1"
   case "$dir" in
     ./*) dir="${dir#./}" ;;
@@ -114,7 +123,7 @@ resolve_dir() {
   esac
 }
 
-# 解析一行登记，设置全局变量 R_NAME / R_MACHINE / R_DIR / R_METHOD / R_TMUX / R_NOTE
+# Parse one registry line into R_NAME / R_MACHINE / R_DIR / R_METHOD / R_TMUX / R_NOTE
 load_run() {
   local name="$1" line
   line="$(find_run "$name")" || return 1
@@ -132,7 +141,7 @@ cmd_list() {
     runs_lines >/dev/null || return 1
   fi
 
-  # 每台机器只问一次 tmux，别每行都 ssh 一趟
+  # Ask tmux once per machine rather than ssh-ing for every row
   local tmux_dump="" machine session
   while IFS= read -r machine; do
     [ -n "$machine" ] || continue
@@ -144,15 +153,15 @@ cmd_list() {
 
   local line name dir method tmuxname note state
   {
-    printf '名字\t机器\t方法\ttmux\t目录\n'
+    printf 'name\tmachine\tmethod\ttmux\tdir\n'
     while IFS= read -r line; do
       read -r name machine dir method tmuxname note <<< "$line"
       if [ "$tmuxname" = "-" ]; then
         state="-"
       elif printf '%s' "$tmux_dump" | grep -qx "$machine $tmuxname"; then
-        state="在跑"
+        state="up"
       else
-        state="不在"
+        state="down"
       fi
       printf '%s\t%s\t%s\t%s\t%s\n' "$name" "$machine" "$method" "$state" "$dir"
     done < <(runs_lines)
@@ -162,22 +171,22 @@ cmd_list() {
 cmd_gpu() {
   local machine="${1:-}"
   if [ -z "$machine" ]; then
-    echo "用法: exp gpu <机器>" >&2
+    echo "usage: exp gpu <machine>" >&2
     return 1
   fi
   run_on "$machine" "nvidia-smi --query-gpu=index,memory.used,memory.total,utilization.gpu --format=csv,noheader,nounits" \
     | awk -F', *' '
       NF >= 4 {
         free = $3 - $2
-        printf "  GPU %-3s %6s / %6s MiB 已用   利用率 %3s%%   %s\n", $1, $2, $3, $4, (free > $3 * 0.9 ? "<- 空" : "")
+        printf "  GPU %-3s %6s / %6s MiB used   util %3s%%   %s\n", $1, $2, $3, $4, (free > $3 * 0.9 ? "<- free" : "")
       }
       NF < 4 { print "  " $0 }'
 }
 
 health_lines() {
-  # 健康检查的每一行，status 和 report 共用一份逻辑。
-  #   $1 = text  打给人看的纯文本（status 用）
-  #   $1 = tsv   打「状态<TAB>标签<TAB>值」（report 用），状态: ok / warn / info
+  # One line per health check. status and report share this logic.
+  #   $1 = text  plain text for a human (used by status)
+  #   $1 = tsv   "status<TAB>label<TAB>value" (used by report), status: ok / warn / info
   local fmt="${1:-text}"
   _health() {
     if [ "$fmt" = "tsv" ]; then
@@ -187,57 +196,57 @@ health_lines() {
     fi
   }
 
-  # tmux 还在不在
+  # is the tmux session still there
   if [ "$R_TMUX" = "-" ]; then
-    _health info "tmux" "-（这个实验不归 exp start/stop 管）"
+    _health info "tmux" "- (this run isn't managed by exp start/stop)"
   elif run_on "$R_MACHINE" "tmux has-session -t '$R_TMUX' 2>/dev/null" >/dev/null 2>&1; then
-    _health ok "tmux $R_TMUX" "在"
+    _health ok "tmux $R_TMUX" "up"
   else
-    _health warn "tmux $R_TMUX" "不在了 -> 敲 exp errors $R_NAME 看报错"
+    _health warn "tmux $R_TMUX" "gone -> run exp errors $R_NAME to see the failure"
   fi
 
-  # 标记文件
+  # marker files
   local marks
   marks="$(run_on "$R_MACHINE" "for f in '$FAILED_MARKER' '$DONE_MARKER'; do [ -e \"$R_DIR/\$f\" ] && echo \"\$f\"; done" 2>/dev/null || true)"
   if [ -z "$marks" ]; then
-    _health info "标记文件" "无"
+    _health info "marker files" "none"
   else
-    _health warn "标记文件" "$(echo "$marks" | tr '\n' ' ')"
+    _health warn "marker files" "$(echo "$marks" | tr '\n' ' ')"
   fi
 
-  # 日志最后更新
+  # when the log last changed
   local newest mtime now mins
   newest="$(newest_log "$R_MACHINE" "$R_DIR")"
   if [ -z "$newest" ]; then
-    _health warn "日志" "没找到（看 $R_DIR/$LOG_DIR）"
+    _health warn "log" "not found (look in $R_DIR/$LOG_DIR)"
   else
     mtime="$(run_on "$R_MACHINE" "stat -c %Y '$newest' 2>/dev/null || stat -f %m '$newest' 2>/dev/null" 2>/dev/null || true)"
     now="$(run_on "$R_MACHINE" "date +%s" 2>/dev/null || true)"
     if [ -n "$mtime" ] && [ -n "$now" ]; then
       mins=$(( (now - mtime) / 60 ))
       if [ "$mins" -gt 30 ]; then
-        _health warn "日志最后更新" "${mins} 分钟前（$(basename "$newest")）"
+        _health warn "log last updated" "${mins} min ago ($(basename "$newest"))"
         if [ "$fmt" = "tsv" ]; then
-          printf 'warn\t日志停更\t超过 30 分钟没动，可能卡在奖励服务、NCCL 或死锁上\n'
+          printf 'warn\tlog stalled\tno update for over 30 min; may be stuck on the reward service, NCCL, or a deadlock\n'
         else
-          printf '    -> 超过 30 分钟没动，可能卡在奖励服务、NCCL 或死锁上\n'
+          printf '    -> no update for over 30 min; may be stuck on the reward service, NCCL, or a deadlock\n'
         fi
       else
-        _health ok "日志最后更新" "${mins} 分钟前（$(basename "$newest")）"
+        _health ok "log last updated" "${mins} min ago ($(basename "$newest"))"
       fi
     else
-      _health info "日志" "$(basename "$newest")（读不到时间）"
+      _health info "log" "$(basename "$newest") (could not read mtime)"
     fi
   fi
 
-  # 奖励服务（配了才查）
+  # reward service (only checked when configured)
   if [ -n "$REWARD_HEALTH_URL" ]; then
     local code
     code="$(run_on "$R_MACHINE" "curl -s -o /dev/null -m 5 -w '%{http_code}' '$REWARD_HEALTH_URL'" 2>/dev/null || true)"
     case "$code" in
-      200|401) _health ok "奖励服务" "活着（HTTP $code）" ;;
-      000|"")  _health warn "奖励服务" "没响应（HTTP ${code:-000}）-> 服务可能挂了" ;;
-      *)       _health info "奖励服务" "HTTP $code" ;;
+      200|401) _health ok "reward service" "up (HTTP $code)" ;;
+      000|"")  _health warn "reward service" "no response (HTTP ${code:-000}) -> the service may be down" ;;
+      *)       _health info "reward service" "HTTP $code" ;;
     esac
   fi
 }
@@ -246,43 +255,44 @@ cmd_status() {
   local name="${1:-$(first_run_name)}"
   load_run "$name" || return 1
 
-  printf '实验: %s\n' "$R_NAME"
-  printf '机器: %s\n' "$R_MACHINE"
-  printf '目录: %s\n' "$R_DIR"
-  printf '方法: %s\n' "$R_METHOD"
+  printf 'run: %s\n' "$R_NAME"
+  printf 'machine: %s\n' "$R_MACHINE"
+  printf 'dir: %s\n' "$R_DIR"
+  printf 'method: %s\n' "$R_METHOD"
   echo
-  echo "健康检查"
+  echo "health checks"
   health_lines text
 
-  # 事前记录：把「判据」和指标摆在一起，逼自己对照跑之前定下的标准，
-  # 而不是看完数字再回头找理由。没写也不拦着，只提醒一句。
+  # Pre-registration: put the criterion next to the metrics, so you're forced to
+  # check against the standard you set before the run instead of hunting for a
+  # reason afterwards. Not writing one isn't blocked, just flagged.
   echo
-  echo "事前记录"
+  echo "pre-registration"
   local plan crit pred
   plan="$(run_on "$R_MACHINE" "cat '$R_DIR/$PLAN_FILE'" 2>/dev/null || true)"
   if [ -z "$plan" ]; then
-    echo "  没有 $PLAN_FILE。跑之前先写六项 -> exp plan $R_NAME"
+    echo "  no $PLAN_FILE yet. Write the six items before you run -> exp plan $R_NAME"
   else
-    crit="$(printf '%s\n' "$plan" | plan_field '判据')"
-    pred="$(printf '%s\n' "$plan" | plan_field '预测')"
+    crit="$(printf '%s\n' "$plan" | plan_field '\(Criterion\|判据\)')"
+    pred="$(printf '%s\n' "$plan" | plan_field '\(Prediction\|预测\)')"
     if [ -n "$crit" ]; then
-      echo "  判据: $crit"
+      echo "  criterion: $crit"
     else
-      echo "  判据: （没写）—— 这是最容易被跳过、也最要紧的一项"
+      echo "  criterion: (not written) - the item most often skipped, and the one that matters most"
     fi
     if [ -n "$pred" ]; then
-      echo "  预测: $pred"
+      echo "  prediction: $pred"
     fi
-    echo "  （全文: exp plan $R_NAME）"
+    echo "  (full text: exp plan $R_NAME)"
   fi
 
   echo
-  echo "进度"
+  echo "progress"
   run_reader "$R_MACHINE" "$R_DIR" "$R_METHOD"
 }
 
 reader_path() {
-  # 方法列 awm-hps -> progress/awm.py；没有同名脚本就用通用的
+  # Method column awm-hps -> progress/awm.py; with no matching script, the generic one
   local base="${1%%-*}"     # awm-hps -> awm
   local reader="$SELF_DIR/progress/$base.py"
   [ -f "$reader" ] || reader="$SELF_DIR/progress/generic.py"
@@ -297,7 +307,7 @@ run_reader() {
     show_cmd "$REMOTE_PYTHON $reader '$dir'"
     "$REMOTE_PYTHON" "$reader" "$dir"
   else
-    # 读取器从本地管道送过去，远端不用装任何东西
+    # The reader is piped over from here, so the remote side needs nothing installed
     show_cmd "ssh $machine \"$REMOTE_PYTHON - '$dir'\" < $reader"
     # shellcheck disable=SC2086
     ssh $SSH_OPTS "$machine" "$REMOTE_PYTHON - '$dir'" < "$reader"
@@ -305,7 +315,7 @@ run_reader() {
 }
 
 dump_series_json() {
-  # dump_series_json <机器> <目录> <读取器>：把原始序列按 JSON 打到 stdout，给 exp report 画图
+  # dump_series_json <machine> <dir> <reader>: raw series as JSON on stdout, for exp report
   local machine="$1" dir="$2" reader="$3"
   if [ "$machine" = "local" ]; then
     show_cmd "$REMOTE_PYTHON $reader '$dir' --json"
@@ -323,10 +333,10 @@ cmd_log() {
   local log
   log="$(newest_log "$R_MACHINE" "$R_DIR")"
   if [ -z "$log" ]; then
-    echo "在 $R_DIR/$LOG_DIR 里没找到日志。" >&2
+    echo "no log found in $R_DIR/$LOG_DIR." >&2
     return 1
   fi
-  echo "实时看 $log（Ctrl+C 退出，训练不会停）" >&2
+  echo "following $log (Ctrl+C to exit; the training keeps running)" >&2
   run_on "$R_MACHINE" "tail -f '$log'"
 }
 
@@ -340,7 +350,7 @@ cmd_attach() {
   local name="${1:-$(first_run_name)}"
   load_run "$name" || return 1
   if [ "$R_TMUX" = "-" ]; then
-    echo "$R_NAME 的 tmux 列是 -，没有可进的会话。" >&2
+    echo "the tmux column for $R_NAME is -, so there is no session to attach to." >&2
     return 1
   fi
   if [ "$R_MACHINE" = "local" ]; then
@@ -369,21 +379,22 @@ cmd_plan() {
     return 0
   fi
 
-  # 没有就生成模板。六项来自 references/experiment-design.md，
-  # 「判据」是最容易被跳过的一项，所以模板里就把话说明白。
+  # Nothing there, so generate the template. The six items come from
+  # references/experiment-design.md; the criterion is the one most often skipped,
+  # so the template says so outright.
   run_on "$R_MACHINE" "cat > '$path'" <<'PLAN'
-# 事前记录 —— 跑之前写完，跑完对照
+# Pre-registration - write it before the run, check against it after
 
-假设：我认为 <改动> 会让 <指标> 变好，因为 <理由>
-对照：baseline 是 <什么>，和实验组同预算、同数据、同评测
-变量：这次只改 <一件事>
-判据：用 <指标> 判断，涨过 <多少> 才算有效（事前定，别看完结果再定）
-预算与止损：最多跑 <多久>，出现 <什么现象> 就提前停
-预测：我觉得结果会是 <什么>，把握 <高/中/低>
+Hypothesis: I think <the change> will improve <the metric>, because <the reason>
+Control: the baseline is <what>, at the same budget, same data, same evaluation
+Variable: this run changes only <one thing>
+Criterion: judge by <metric>; it counts only if it moves past <how much> (decide now, not after seeing the result)
+Budget and stop-loss: run for at most <how long>; stop early if <what happens>
+Prediction: I expect <what>, confidence <high/medium/low>
 PLAN
   echo
-  echo "已生成 $path —— 把 <尖括号> 里的填掉。"
-  echo "填完再 exp status $name，「判据」就会印在指标旁边。"
+  echo "Wrote $path - fill in the <angle brackets>."
+  echo "Once it's filled in, exp status $name will print the criterion next to the metrics."
 }
 
 cmd_report() {
@@ -392,31 +403,33 @@ cmd_report() {
     case "$1" in
       --out)     out="${2:-}"; shift 2 ;;
       --out=*)   out="${1#--out=}"; shift ;;
-      -h|--help) echo "用法: exp report [名字] [--out 路径]" >&2; return 0 ;;
-      -*)        echo "不认识的参数：$1" >&2; return 1 ;;
+      -h|--help) echo "usage: exp report [name] [--out path]" >&2; return 0 ;;
+      -*)        echo "unknown option: $1" >&2; return 1 ;;
       *)         name="$1"; shift ;;
     esac
   done
   [ -n "$name" ] || name="$(first_run_name)"
   load_run "$name" || return 1
 
-  # 报告写到当前目录，别写进运行目录——那可能是共享盘、只读或别人的。
-  # 路径可以用 REPORT_DIR 配置改，也可以 --out 单次覆盖。
+  # The report goes to the current directory, not the run directory - that may be
+  # shared, read-only, or someone else's. Change the path with REPORT_DIR, or
+  # override for one call with --out.
   local target="${out:-${REPORT_DIR:-.}/exp-report-$R_NAME.html}"
   local target_dir; target_dir="$(dirname "$target")"
   if [ ! -d "$target_dir" ]; then
-    mkdir -p "$target_dir" || { echo "建不了输出目录：$target_dir" >&2; return 1; }
+    mkdir -p "$target_dir" || { echo "cannot create output dir: $target_dir" >&2; return 1; }
   fi
 
-  printf '实验: %s\n' "$R_NAME"
-  printf '机器: %s\n' "$R_MACHINE"
-  printf '目录: %s\n' "$R_DIR"
-  printf '方法: %s\n' "$R_METHOD"
+  printf 'run: %s\n' "$R_NAME"
+  printf 'machine: %s\n' "$R_MACHINE"
+  printf 'dir: %s\n' "$R_DIR"
+  printf 'method: %s\n' "$R_METHOD"
   echo
 
   local tmp; tmp="$(mktemp -d)"
 
-  # 1) 指标原始序列（JSON）。方法专用读取器不支持 --json 就退回通用读取器。
+  # 1) raw metric series (JSON). Falls back to the generic reader when a
+  #    method-specific reader doesn't support --json.
   local reader; reader="$(reader_path "$R_METHOD")"
   dump_series_json "$R_MACHINE" "$R_DIR" "$reader" > "$tmp/series.json"
   if [ "$(head -c 1 "$tmp/series.json" 2>/dev/null)" != "{" ]; then
@@ -424,13 +437,14 @@ cmd_report() {
     dump_series_json "$R_MACHINE" "$R_DIR" "$reader" > "$tmp/series.json"
   fi
 
-  # 2) 事前记录全文（判据、预测从里面挑）
+  # 2) the full pre-registration (criterion and prediction come out of it)
   run_on "$R_MACHINE" "cat '$R_DIR/$PLAN_FILE'" > "$tmp/plan.md"
 
-  # 3) 健康检查（和 exp status 同一份逻辑）
+  # 3) health checks (same logic as exp status)
   health_lines tsv > "$tmp/health.tsv"
 
-  # 4) 在本机渲染成一份自包含的 HTML（渲染器要读本机文件、写本机文件）
+  # 4) render to a self-contained HTML file locally (the renderer reads and writes
+  #    local files)
   local py="${LOCAL_PYTHON:-$REMOTE_PYTHON}"
   local renderer="$SELF_DIR/progress/report.py"
   show_cmd "$py $renderer --out '$target' --name '$R_NAME' --machine '$R_MACHINE' --dir '$R_DIR' --method '$R_METHOD' --series-json $tmp/series.json --plan $tmp/plan.md --health $tmp/health.tsv"
@@ -439,14 +453,14 @@ cmd_report() {
         --name "$R_NAME" --machine "$R_MACHINE" --dir "$R_DIR" --method "$R_METHOD" \
         --series-json "$tmp/series.json" --plan "$tmp/plan.md" --health "$tmp/health.tsv"; then
     rm -rf "$tmp"
-    echo "生成失败。" >&2
+    echo "render failed." >&2
     return 1
   fi
   rm -rf "$tmp"
 
   echo
-  echo "报告已生成：$target"
-  echo "单文件自包含，直接双击用浏览器打开即可（断网也能看）。"
+  echo "report written: $target"
+  echo "Single self-contained file - double-click to open it in a browser, offline."
 }
 
 confirm() {
@@ -462,73 +476,74 @@ confirm() {
 cmd_start() {
   local name="${1:-}"
   if [ -z "$name" ]; then
-    echo "用法: exp start <名字>" >&2
+    echo "usage: exp start <name>" >&2
     return 1
   fi
   load_run "$name" || return 1
   if [ "$R_TMUX" = "-" ]; then
-    echo "$R_NAME 的 tmux 列是 -，表示不归 exp start/stop 管。" >&2
-    echo "要自己起就手动敲：tmux new -d -s <名字> 'bash launch.sh'" >&2
+    echo "the tmux column for $R_NAME is -, meaning exp start/stop doesn't manage it." >&2
+    echo "to start it yourself: tmux new -d -s <name> 'bash launch.sh'" >&2
     return 1
   fi
 
-  echo "启动前先看一眼 $R_MACHINE 的卡："
+  echo "GPUs on $R_MACHINE before we start:"
   cmd_gpu "$R_MACHINE"
   echo
-  if ! confirm "确认在 $R_MACHINE 上启动 $R_NAME（tmux: $R_TMUX）？"; then
-    echo "已取消。"
+  if ! confirm "Start $R_NAME on $R_MACHINE (tmux: $R_TMUX)?"; then
+    echo "cancelled."
     return 0
   fi
 
   run_on "$R_MACHINE" "cd '$R_DIR' && tmux new -d -s '$R_TMUX' 'bash launch.sh'"
-  echo "已启动。1-2 分钟后敲 exp log $R_NAME 确认模型正常加载。"
-  echo "提示：第一次跑先把步数设成 2 试通，再改成正式步数。"
+  echo "started. After a minute or two, run exp log $R_NAME to confirm the model loaded."
+  echo "tip: on a first run, set the step count to 2 and get it running end to end, then set the real number."
 }
 
 cmd_stop() {
   local name="${1:-}"
   if [ -z "$name" ]; then
-    echo "用法: exp stop <名字>" >&2
+    echo "usage: exp stop <name>" >&2
     return 1
   fi
   load_run "$name" || return 1
   if [ "$R_TMUX" = "-" ]; then
-    echo "$R_NAME 的 tmux 列是 -，不归 exp stop 管。" >&2
+    echo "the tmux column for $R_NAME is -, so exp stop doesn't manage it." >&2
     return 1
   fi
 
-  if ! confirm "确认停止 $R_NAME（tmux: $R_TMUX，在 $R_MACHINE 上）？"; then
-    echo "已取消。"
+  if ! confirm "Stop $R_NAME (tmux: $R_TMUX, on $R_MACHINE)?"; then
+    echo "cancelled."
     return 0
   fi
 
   run_on "$R_MACHINE" "tmux kill-session -t '$R_TMUX'"
-  echo "已停止。要续跑就敲 exp start $R_NAME。"
+  echo "stopped. To resume, run exp start $R_NAME."
 }
 
 usage() {
   cat <<EOF
-exp —— 训练实验的统一入口
+exp - one entry point for training runs
 
-  exp list                登记了哪些实验，哪些还在跑
-  exp status [名字]        进度、指标趋势、健康检查（默认看登记表第一行那个）
-  exp log [名字]           实时滚动看日志（Ctrl+C 退出，训练不会停）
-  exp errors [名字]        搜报错
-  exp gpu <机器>           看某台机器的卡空不空
-  exp start <名字>         启动（先给你看 GPU，确认后才起）
-  exp stop <名字>          停止
-  exp attach [名字]        进 tmux 画面（退出按 Ctrl+B 再按 D）
-  exp config [名字]        打印这个实验的 launch.sh
-  exp plan [名字]          事前记录：没有就生成模板，有就打印全文
-  exp report [名字]        生成一份自包含的 HTML 报告（曲线 + 判据参考线 + 健康检查）
-                           默认写到 ./exp-report-<名字>.html，可用 --out 或 REPORT_DIR 改
-  exp help                这份说明
+  exp list                which runs are registered, and which are still going
+  exp status [name]       progress, metric trend, health checks (defaults to the first registry row)
+  exp log [name]          follow the log live (Ctrl+C to exit; the training keeps running)
+  exp errors [name]       search for errors
+  exp gpu <machine>       see whether a machine's GPUs are free
+  exp start <name>        start it (shows you the GPUs and asks before launching)
+  exp stop <name>         stop it
+  exp attach [name]       attach to the tmux session (exit with Ctrl+B then D)
+  exp config [name]       print this run's launch.sh
+  exp plan [name]         pre-registration: generates the template if absent, prints it if present
+  exp report [name]       render a self-contained HTML report (curves + criterion line + health checks)
+                          writes to ./exp-report-<name>.html; change with --out or REPORT_DIR
+  exp help                this text
 
-每条命令执行前都会打印它背后真正跑的命令（灰色的 + ...），
-复制下来自己改着用，熟了以后不用这个工具也能干。
+Every command prints the command it actually runs first (the grey + ...), so you
+can copy it, modify it, and use it directly. Once you're comfortable you don't
+need this tool at all.
 
-配置文件: $EXPT_CONF
-登记表:   $RUNS_CONF
+config:   $EXPT_CONF
+registry: $RUNS_CONF
 EOF
 }
 
@@ -549,7 +564,7 @@ case "$cmd" in
   report|rep)       cmd_report "$@" ;;
   help|-h|--help)   usage ;;
   *)
-    echo "不认识这个命令：$cmd" >&2
+    echo "unknown command: $cmd" >&2
     echo
     usage
     exit 1

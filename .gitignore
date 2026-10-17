@@ -1,4 +1,4 @@
-# 用户自己的配置和登记表，不进仓库
+# The user's own config and registry; not part of the repository
 runs.conf
 exptool.conf
 
