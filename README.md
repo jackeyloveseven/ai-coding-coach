@@ -1,7 +1,5 @@
 # ai-coding-coach
 
-[![tests](https://github.com/jackeyloveseven/ai-coding-coach/actions/workflows/test.yml/badge.svg)](https://github.com/jackeyloveseven/ai-coding-coach/actions/workflows/test.yml)
-
 > **Writes code with you, and turns you into an engineer who can see at a glance where the AI got it wrong.**
 
 For early- and mid-career ML engineers. The goal isn't to type faster than the AI. It's to be able to **review** the AI.
@@ -123,7 +121,7 @@ Scaffolding first (function signature, expected output, `allclose` against an of
 
 ### 4. The mastery ledger (optional)
 
-With your consent, `scripts/ledger.py` records a mastery level per topic locally, schedules reviews on a 1 / 3 / 7 / 16 / 35 day spacing, and adjusts the tier accordingly: **stabilized topics drop a tier, repeatedly fumbled topics rise one.**
+With your consent, the Pro edition's `scripts/ledger.py` records a mastery level per topic locally, schedules reviews on a 1 / 3 / 7 / 16 / 35 day spacing, and adjusts the tier accordingly: **stabilized topics drop a tier, repeatedly fumbled topics rise one.**
 
 Where there's no local storage — a web chat, say — it prints a **study card** instead: plain text you paste into your own notes and paste back at the start of the next conversation.
 
@@ -178,7 +176,9 @@ git clone https://github.com/jackeyloveseven/ai-coding-coach .claude/skills/ai-c
 
 ## Editions
 
-| | **Community** (this repo) | **Pro** |
+Two editions of the same skill. The Community edition is this repository, on the `main` branch. The Pro edition is the `pro` branch, which is this one plus the tooling.
+
+| | **Community** (`main`) | **Pro** (`pro`) |
 |---|---|---|
 | License | MIT | Commercial |
 | Coaching discipline (`SKILL.md`, `/coach-drill`) | ✅ | ✅ |
@@ -214,21 +214,18 @@ ai-coding-coach/
 │   ├── question-bank.md                  # Question-writing rules, types, level selection, seed questions
 │   ├── mastery-ledger.md                 # Levels, spaced review, assessment, study cards
 │   └── practice-menu.md                  # Write-first-then-review, the four verification habits, silent bugs
-├── scripts/
-│   └── ledger.py                         # Mastery ledger (standard library only)
-└── exptool/                              # Companion tooling: one entry point for training runs
-    ├── exp                               # Command entry point (bash)
-    ├── progress/
-    │   ├── generic.py                    # Generic progress reader (--json feeds exp report)
-    │   └── report.py                     # Renders exp report: self-contained HTML, hand-written SVG charts
-    └── tests/                            # Runnable locally; no cluster required
+└── LICENSE-COMMERCIAL                    # Terms for the Pro edition
 ```
+
+The Pro branch adds two things on top of this: `exptool/` (the run-tracking tool) and `scripts/ledger.py` (the mastery ledger). Everything else is identical.
 
 The reference files load on demand, never all at once.
 
 ---
 
-## The ledger script
+## The ledger script (Pro)
+
+Ships on the `pro` branch. Without it, the skill falls back to the study card described above — same levels, same intervals, just kept by hand.
 
 ```bash
 python3 scripts/ledger.py record dpo-loss pass --note "got beta's role right"
@@ -255,7 +252,9 @@ Mastery levels:
 
 ---
 
-## Companion tooling: exptool
+## Companion tooling: exptool (Pro)
+
+Ships on the `pro` branch.
 
 [`references/training-run-literacy.md`](references/training-run-literacy.md) covers how to read a training log and judge a run's status. `exptool/` is the execution entry point for that method — it collects launching, inspecting and resuming runs into a single `exp` command.
 
@@ -268,7 +267,7 @@ It also reads a `PLAN.md` (the pre-registration) from the experiment directory a
 
 Curves are what graphs are for; reading them in a table means staring at single steps. `exp report <name>` renders one run as a **single self-contained HTML file** — zero external references, openable offline by double-click: trend curves (thin line is the raw per-step value, heavy dotted line is the segment mean), the 8-segment means table, health checks, and a reference line for the criterion. If it can recognize the metric and the value it draws the line; if not, it degrades to an annotation strip above the chart rather than drawing something wrong. And when the reference was inferred from this run's own data, the report says so explicitly — that it is not the criterion itself, and that reading still goes by what the `PLAN` says.
 
-It is a **generic, sanitized** version — hostnames, shared-disk paths and reward-service addresses all come from a config file. It runs locally with no cluster:
+It is a **generic, sanitized** version — hostnames, shared-disk paths and reward-service addresses all come from a config file. On the `pro` branch it runs locally with no cluster:
 
 ```bash
 cd exptool
@@ -276,7 +275,7 @@ cp runs.conf.example runs.conf
 ./exp list && ./exp status demo-sft
 ```
 
-Details, plus the list of what is and isn't verified, are in [`exptool/README.md`](exptool/README.md).
+Details, plus the list of what is and isn't verified, are in `exptool/README.md` on the `pro` branch.
 
 ---
 

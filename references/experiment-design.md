@@ -21,7 +21,7 @@ Prediction: I expect <what>, confidence <high/medium/low>
 
 The **criterion** is the item most often skipped. Deciding "how much counts as an improvement" after the results are in will almost always produce "it improved".
 
-If you're using a run-tracking tool that supports it, let the tool hold the criterion rather than their memory: the bundled `exptool` generates this template with `exp plan <run>` and prints the criterion directly above the metrics with `exp status`, so there's nothing to remember to check back against.
+If you're using a run-tracking tool that supports it, let the tool hold the criterion rather than their memory: the Pro edition's `exptool` generates this template with `exp plan <run>` and prints the criterion directly above the metrics with `exp status`, so there's nothing to remember to check back against. Without a tool, the criterion goes at the top of the run's notes, and reading the metrics means scrolling past it.
 
 ## 2 The usual traps
 

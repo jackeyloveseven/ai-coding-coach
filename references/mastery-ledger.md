@@ -6,11 +6,11 @@ Contents: 1 Two ways to store it · 2 Consent and privacy · 3 Levels and eviden
 
 ## 1 Two ways to store it
 
-**A. There is a persistent local filesystem** (Claude Code, a local workspace) and the user agrees: use `scripts/ledger.py`. The ledger lives locally and survives across sessions.
+**A. The Pro ledger script is installed** (`scripts/ledger.py`) and the user agrees: use it. The ledger lives locally and survives across sessions.
 
-**B. There is no persistent storage** (a web chat where the container resets and the skill directory is read-only): do not pretend to remember. Print a **study card** at wrap-up (format in §7), ask the user to save it in their own notes, and have them paste it back at the start of the next conversation. You read it and behave as the ledger.
+**B. There is no ledger script**, or no persistent storage to put it in (a web chat where the container resets and the skill directory is read-only): do not pretend to remember. Print a **study card** at wrap-up (format in §7), ask the user to save it in their own notes, and have them paste it back at the start of the next conversation. You read it and behave as the ledger.
 
-**Which one you're in** depends on where you're running. On the user's own machine (Claude Code, a local workspace) it's A. In a sandbox that resets (web chat, files delivered through an upload step, read-only skill directory) it's B. Don't decide by "can I write a file" — writing succeeds in a sandbox too, and then the session ends and it's gone. If you're unsure, use B, because B never writes anything.
+**Which one you're in** depends on where you're running. If the script exists and you're on the user's own machine (Claude Code, a local workspace), it's A. In a sandbox that resets (web chat, files delivered through an upload step, read-only skill directory) it's B. Don't decide by "can I write a file" — writing succeeds in a sandbox too, and then the session ends and it's gone. If you're unsure, use B, because B never writes anything.
 
 ## 2 Consent and privacy
 
@@ -86,7 +86,7 @@ Recurring mistakes:
 
 When they paste it back next time, read it, and print an updated card at the end of that session.
 
-## 8 Script usage
+## 8 The ledger script (Pro edition)
 
 ```bash
 python3 scripts/ledger.py record dpo-loss pass --note "got beta's role right"
@@ -96,6 +96,8 @@ python3 scripts/ledger.py due --limit 3    # what's due for review
 python3 scripts/ledger.py show             # every topic, with tier suggestions
 python3 scripts/ledger.py card             # export a study card
 ```
+
+This script ships with the Pro edition. Without it, fall back to the study card in §7 — the levels, the intervals and the evidence rules are identical either way, you're just doing the bookkeeping by hand.
 
 The ledger defaults to `~/.ai-coding-coach/ledger.json`; set `COACH_LEDGER` to move it. If the script reads a corrupt file it errors out and stops rather than overwriting it.
 

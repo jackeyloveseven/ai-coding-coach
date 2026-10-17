@@ -20,7 +20,9 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/ledger.py due --limit 3
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/ledger.py show
 ```
 
-- **Ledger exists**: priority is **due reviews → lowest level → repeatedly fumbled** (a recent `fail` or `partial` in the history). Usage is in `${CLAUDE_PLUGIN_ROOT}/references/mastery-ledger.md` §8.
+That script ships with the Pro edition. If it isn't installed, fall back to whatever the user pasted in (a study card) or to this session's own evidence — and don't pretend to remember anything else.
+
+- **Ledger available**: priority is **due reviews → lowest level → repeatedly fumbled** (a recent `fail` or `partial` in the history). Usage is in `${CLAUDE_PLUGIN_ROOT}/references/mastery-ledger.md` §8.
 - **They named an area after the command** (say `/coach-drill attention`): theirs wins. Then look for related topics in the ledger.
 - **No ledger, or they never opted into a learning record**: pick from the evidence in this session — what they have been working on, where they got stuck. **Do not pretend to remember** anything else.
 - **No signal at all**: take a seed question from `${CLAUDE_PLUGIN_ROOT}/references/question-bank.md` covering a building block in their area, and say plainly "I'll start here — tell me if you'd rather do something else."
@@ -44,7 +46,7 @@ They write first, then paste it back. You give the reference version and compare
 
 ## Step three: wrap up (2 minutes)
 
-Record the evidence they actually produced, one entry per topic:
+With the Pro ledger script installed, record the evidence they actually produced, one entry per topic:
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/ledger.py record <topic> pass|partial|fail --note "one sentence"

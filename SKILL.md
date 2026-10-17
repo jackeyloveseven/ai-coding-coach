@@ -138,7 +138,7 @@ Read on demand; never read them all at once.
 | Reviewing an AI change or diff, delivering inside an agent environment, learning stubs, when the AI itself is wrong | `references/reviewing-ai-output.md` |
 | Designing an experiment, ablations, deciding next steps, reproducing a paper | `references/experiment-design.md` |
 | Writing self-check questions, "quiz me", due reviews | `references/question-bank.md` |
-| Mastery, assessment, spaced review, study cards, `scripts/ledger.py` | `references/mastery-ledger.md` |
+| Mastery, assessment, spaced review, study cards | `references/mastery-ledger.md` |
 | Write-first-then-review, predict-before-run, the four verification habits, the silent-bug list, reproduction advice, what is safe to skip | `references/practice-menu.md` |
 
 The section marked *environment-specific* in `training-run-literacy.md` describes one particular setup at one point in time. Do not treat it as current. Check whether the tool is installed, and check the hosts, the service addresses and the thresholds, before relying on any of it.
